@@ -1,33 +1,44 @@
-import { useState, Suspense } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, Suspense, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { ArrowLeft, Play, Pause, SkipBack, SkipForward, Share2, Copy, RotateCcw, Check, Sparkles } from 'lucide-react';
 import RubiksCube3D from '@/components/RubiksCube3D';
 import confetti from 'canvas-confetti';
-import { useEffect } from 'react';
+import { CubeMove, parseSolution } from '@/lib/cubeSolver';
 
-// Sample solution moves
-const sampleMoves = [
-  { notation: "R", description: "Rotate right face clockwise" },
-  { notation: "U", description: "Rotate upper face clockwise" },
-  { notation: "R'", description: "Rotate right face counter-clockwise" },
-  { notation: "U'", description: "Rotate upper face counter-clockwise" },
-  { notation: "R", description: "Rotate right face clockwise" },
-  { notation: "U", description: "Rotate upper face clockwise" },
-  { notation: "R'", description: "Rotate right face counter-clockwise" },
-  { notation: "F", description: "Rotate front face clockwise" },
-  { notation: "R", description: "Rotate right face clockwise" },
-  { notation: "F'", description: "Rotate front face counter-clockwise" },
+// Default solution for demo
+const defaultMoves: CubeMove[] = [
+  { notation: "R", face: "R", direction: "clockwise", description: "Rotate right face clockwise" },
+  { notation: "U", face: "U", direction: "clockwise", description: "Rotate upper face clockwise" },
+  { notation: "R'", face: "R", direction: "counter-clockwise", description: "Rotate right face counter-clockwise" },
+  { notation: "U'", face: "U", direction: "counter-clockwise", description: "Rotate upper face counter-clockwise" },
+  { notation: "R", face: "R", direction: "clockwise", description: "Rotate right face clockwise" },
+  { notation: "U", face: "U", direction: "clockwise", description: "Rotate upper face clockwise" },
+  { notation: "R'", face: "R", direction: "counter-clockwise", description: "Rotate right face counter-clockwise" },
+  { notation: "F", face: "F", direction: "clockwise", description: "Rotate front face clockwise" },
+  { notation: "R", face: "R", direction: "clockwise", description: "Rotate right face clockwise" },
+  { notation: "F'", face: "F", direction: "counter-clockwise", description: "Rotate front face counter-clockwise" },
 ];
+
+interface LocationState {
+  solution?: CubeMove[];
+  moveCount?: number;
+  cubeState?: Record<string, string[]>;
+}
 
 const Solution = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const locationState = location.state as LocationState | null;
+  
   const [currentStep, setCurrentStep] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [speed, setSpeed] = useState<'slow' | 'normal' | 'fast'>('normal');
   const [copied, setCopied] = useState(false);
 
-  const totalMoves = sampleMoves.length;
+  // Use solution from navigation state or default
+  const moves = locationState?.solution || defaultMoves;
+  const totalMoves = moves.length;
   const progress = ((currentStep + 1) / totalMoves) * 100;
 
   // Confetti effect on mount
@@ -65,20 +76,34 @@ const Solution = () => {
   };
 
   const handleCopyMoves = () => {
-    const moveString = sampleMoves.map(m => m.notation).join(' ');
+    const moveString = moves.map(m => m.notation).join(' ');
     navigator.clipboard.writeText(moveString);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleShare = () => {
+  const handleShare = async () => {
+    const moveString = moves.map(m => m.notation).join(' ');
+    
     if (navigator.share) {
-      navigator.share({
-        title: 'My Cube Solution',
-        text: `I solved my Rubik's Cube in ${totalMoves} moves using JSN Solving!`,
-        url: window.location.href,
-      });
+      try {
+        await navigator.share({
+          title: 'My Cube Solution - JSN Solving',
+          text: `I solved my Rubik's Cube in ${totalMoves} moves!\n\nSolution: ${moveString}`,
+          url: window.location.origin,
+        });
+      } catch (err) {
+        // User cancelled or share failed
+      }
+    } else {
+      // Fallback to copy
+      handleCopyMoves();
     }
+  };
+
+  const handleRestart = () => {
+    setCurrentStep(0);
+    setIsPlaying(false);
   };
 
   return (
@@ -118,7 +143,7 @@ const Solution = () => {
         <div className="mb-4">
           <div className="flex justify-between text-sm mb-2">
             <span className="text-muted-foreground">Step {currentStep + 1} of {totalMoves}</span>
-            <span className="font-mono font-bold text-lg">{sampleMoves[currentStep]?.notation}</span>
+            <span className="font-mono font-bold text-lg">{moves[currentStep]?.notation}</span>
           </div>
           <div className="w-full h-2 bg-secondary rounded-full overflow-hidden">
             <motion.div
@@ -126,6 +151,27 @@ const Solution = () => {
               animate={{ width: `${progress}%` }}
               transition={{ duration: 0.3 }}
             />
+          </div>
+        </div>
+
+        {/* All Moves Display */}
+        <div className="mb-4 p-3 rounded-xl bg-secondary/50 border border-border">
+          <div className="flex flex-wrap gap-1.5 justify-center">
+            {moves.map((move, index) => (
+              <button
+                key={index}
+                onClick={() => setCurrentStep(index)}
+                className={`px-2 py-1 rounded font-mono text-sm transition-all ${
+                  index === currentStep
+                    ? 'bg-primary text-primary-foreground scale-110'
+                    : index < currentStep
+                    ? 'bg-green-500/20 text-green-500'
+                    : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                }`}
+              >
+                {move.notation}
+              </button>
+            ))}
           </div>
         </div>
 
@@ -151,7 +197,7 @@ const Solution = () => {
           animate={{ opacity: 1, y: 0 }}
           className="glass-card text-center mb-6"
         >
-          <p className="text-lg font-medium">{sampleMoves[currentStep]?.description}</p>
+          <p className="text-lg font-medium">{moves[currentStep]?.description}</p>
         </motion.div>
 
         {/* Playback Controls */}

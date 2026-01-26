@@ -1,17 +1,17 @@
 import { useState } from 'react';
-import { Menu, X, Home, Puzzle, Timer, BookOpen, Crown, Settings, Info, Mail } from 'lucide-react';
+import { Menu, X, Home, Puzzle, Clock, BookOpen, Crown, Settings, Info, Mail } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Link, useLocation } from 'react-router-dom';
 
 const menuItems = [
   { icon: Home, label: 'Home', path: '/' },
-  { icon: Puzzle, label: 'Cube Solver', path: '/solver' },
-  { icon: Timer, label: 'Timer', path: '/timer', premium: true },
+  { icon: Puzzle, label: 'Cube Solver', path: '/manual-input' },
+  { icon: Clock, label: 'Timer', path: '/timer' },
   { icon: BookOpen, label: 'Tutorials', path: '/tutorials', premium: true },
   { icon: Crown, label: 'Upgrade to Premium', path: '/premium', highlight: true },
-  { icon: Settings, label: 'Settings', path: '/settings' },
-  { icon: Info, label: 'About', path: '/about' },
-  { icon: Mail, label: 'Contact', path: '/contact' },
+  { icon: Settings, label: 'Settings', path: '/settings', premium: true },
+  { icon: Info, label: 'About', path: '/about', premium: true },
+  { icon: Mail, label: 'Contact', path: '/contact', premium: true },
 ];
 
 const Header = () => {
