@@ -8,6 +8,7 @@ import ManualInput from "./pages/ManualInput";
 import CameraInput from "./pages/CameraInput";
 import Solution from "./pages/Solution";
 import Premium from "./pages/Premium";
+import Timer from "./pages/Timer";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -24,6 +25,7 @@ const App = () => (
           <Route path="/camera" element={<CameraInput />} />
           <Route path="/solution" element={<Solution />} />
           <Route path="/premium" element={<Premium />} />
+          <Route path="/timer" element={<Timer />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>

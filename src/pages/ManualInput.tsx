@@ -1,15 +1,19 @@
 import { useState, Suspense } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ArrowLeft, ChevronLeft, ChevronRight, Check, RotateCcw } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, ChevronRight, Check, RotateCcw, Loader2 } from 'lucide-react';
 import RubiksCube3D from '@/components/RubiksCube3D';
 import ColorPicker from '@/components/ColorPicker';
 import FaceGrid from '@/components/FaceGrid';
 import { useCubeState } from '@/hooks/useCubeState';
+import { solveCube } from '@/lib/cubeSolver';
+import { useToast } from '@/hooks/use-toast';
 
 const ManualInput = () => {
   const navigate = useNavigate();
+  const { toast } = useToast();
   const [selectedColor, setSelectedColor] = useState('red');
+  const [isSolving, setIsSolving] = useState(false);
   
   const {
     cubeState,
@@ -19,6 +23,7 @@ const ManualInput = () => {
     setStickerOnCurrentFace,
     nextFace,
     prevFace,
+    goToFace,
     resetCube,
     filledCount,
     totalCount,
@@ -32,8 +37,37 @@ const ManualInput = () => {
     setStickerOnCurrentFace(index, selectedColor);
   };
 
-  const handleSolve = () => {
-    navigate('/solution');
+  const handleSolve = async () => {
+    setIsSolving(true);
+    
+    try {
+      const result = await solveCube(cubeState);
+      
+      if (result.success && result.solution) {
+        // Navigate to solution page with the solution data
+        navigate('/solution', { 
+          state: { 
+            solution: result.solution,
+            moveCount: result.moveCount,
+            cubeState 
+          } 
+        });
+      } else {
+        toast({
+          variant: "destructive",
+          title: "Invalid Cube State",
+          description: result.error || "Please check your cube colors",
+        });
+      }
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to solve cube. Please try again.",
+      });
+    } finally {
+      setIsSolving(false);
+    }
   };
 
   return (
@@ -84,7 +118,7 @@ const ManualInput = () => {
             return (
               <button
                 key={face}
-                onClick={() => {}}
+                onClick={() => goToFace(index)}
                 className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all ${
                   isCurrent
                     ? 'bg-primary text-primary-foreground scale-110'
@@ -175,12 +209,21 @@ const ManualInput = () => {
         <div className="max-w-md mx-auto">
           <button
             onClick={handleSolve}
-            disabled={!isCubeComplete}
-            className={`btn-primary w-full h-16 text-lg ${
-              !isCubeComplete ? 'opacity-50 cursor-not-allowed' : 'animate-pulse-glow'
+            disabled={!isCubeComplete || isSolving}
+            className={`btn-primary w-full h-16 text-lg flex items-center justify-center gap-2 ${
+              !isCubeComplete || isSolving ? 'opacity-50 cursor-not-allowed' : 'animate-pulse-glow'
             }`}
           >
-            {isCubeComplete ? 'Solve Cube' : 'Complete all faces to solve'}
+            {isSolving ? (
+              <>
+                <Loader2 className="w-6 h-6 animate-spin" />
+                Solving...
+              </>
+            ) : isCubeComplete ? (
+              'Solve Cube'
+            ) : (
+              'Complete all faces to solve'
+            )}
           </button>
         </div>
       </main>
