@@ -1,10 +1,11 @@
 import { useState, Suspense, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Play, Pause, SkipBack, SkipForward, Share2, Copy, RotateCcw, Check, Sparkles } from 'lucide-react';
+import { ArrowLeft, Share2, Copy, RotateCcw, Check, Sparkles, GraduationCap, Zap } from 'lucide-react';
 import RubiksCube3D from '@/components/RubiksCube3D';
+import SolveControls from '@/components/SolveControls';
 import confetti from 'canvas-confetti';
-import { CubeMove, parseSolution } from '@/lib/cubeSolver';
+import { CubeMove } from '@/lib/cubeSolver';
 
 // Default solution for demo
 const defaultMoves: CubeMove[] = [
@@ -26,6 +27,15 @@ interface LocationState {
   cubeState?: Record<string, string[]>;
 }
 
+const faceHighlightColors: Record<string, string> = {
+  R: 'shadow-[0_0_30px_rgba(220,38,38,0.6)]',
+  L: 'shadow-[0_0_30px_rgba(249,115,22,0.6)]',
+  U: 'shadow-[0_0_30px_rgba(255,255,255,0.6)]',
+  D: 'shadow-[0_0_30px_rgba(255,215,0,0.6)]',
+  F: 'shadow-[0_0_30px_rgba(34,197,94,0.6)]',
+  B: 'shadow-[0_0_30px_rgba(37,99,235,0.6)]',
+};
+
 const Solution = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -35,11 +45,12 @@ const Solution = () => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [speed, setSpeed] = useState<'slow' | 'normal' | 'fast'>('normal');
   const [copied, setCopied] = useState(false);
+  const [learningMode, setLearningMode] = useState(true);
+  const [soundEnabled, setSoundEnabled] = useState(false);
 
   // Use solution from navigation state or default
   const moves = locationState?.solution || defaultMoves;
   const totalMoves = moves.length;
-  const progress = ((currentStep + 1) / totalMoves) * 100;
 
   // Confetti effect on mount
   useEffect(() => {
@@ -52,24 +63,33 @@ const Solution = () => {
 
   // Auto-play logic
   useEffect(() => {
-    if (isPlaying && currentStep < totalMoves - 1) {
-      const delay = speed === 'slow' ? 2000 : speed === 'fast' ? 500 : 1000;
+    if (isPlaying && currentStep < totalMoves) {
+      const delay = speed === 'slow' ? 2500 : speed === 'fast' ? 600 : 1200;
       const timer = setTimeout(() => {
-        setCurrentStep(prev => prev + 1);
+        if (currentStep < totalMoves) {
+          setCurrentStep(prev => prev + 1);
+        }
+        if (currentStep >= totalMoves - 1) {
+          setIsPlaying(false);
+          // Celebration confetti on completion
+          confetti({
+            particleCount: 200,
+            spread: 100,
+            origin: { y: 0.6 }
+          });
+        }
       }, delay);
       return () => clearTimeout(timer);
-    } else if (currentStep >= totalMoves - 1) {
-      setIsPlaying(false);
     }
   }, [isPlaying, currentStep, speed, totalMoves]);
 
-  const handleNext = () => {
-    if (currentStep < totalMoves - 1) {
+  const handleStepForward = () => {
+    if (currentStep < totalMoves) {
       setCurrentStep(prev => prev + 1);
     }
   };
 
-  const handlePrev = () => {
+  const handleStepBack = () => {
     if (currentStep > 0) {
       setCurrentStep(prev => prev - 1);
     }
@@ -96,7 +116,6 @@ const Solution = () => {
         // User cancelled or share failed
       }
     } else {
-      // Fallback to copy
       handleCopyMoves();
     }
   };
@@ -106,19 +125,45 @@ const Solution = () => {
     setIsPlaying(false);
   };
 
+  const currentMove = currentStep > 0 ? moves[currentStep - 1] : null;
+  const nextMove = moves[currentStep];
+  const highlightClass = nextMove ? faceHighlightColors[nextMove.face] || '' : '';
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
       <header className="fixed top-0 left-0 right-0 z-50 gradient-main">
         <div className="flex items-center gap-3 px-4 py-3">
           <button
-            onClick={() => navigate('/')}
+            onClick={() => navigate('/home')}
             className="p-2 rounded-lg hover:bg-white/10 transition-colors"
             aria-label="Go back"
           >
             <ArrowLeft className="w-5 h-5 text-white" />
           </button>
-          <h1 className="text-lg font-semibold text-white">Solution</h1>
+          <h1 className="text-lg font-semibold text-white flex-1">Solution</h1>
+          
+          {/* Mode Toggle */}
+          <button
+            onClick={() => setLearningMode(!learningMode)}
+            className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
+              learningMode 
+                ? 'bg-green-500/20 text-green-400 border border-green-500/30' 
+                : 'bg-orange-500/20 text-orange-400 border border-orange-500/30'
+            }`}
+          >
+            {learningMode ? (
+              <>
+                <GraduationCap className="w-4 h-4" />
+                Learn
+              </>
+            ) : (
+              <>
+                <Zap className="w-4 h-4" />
+                Pro
+              </>
+            )}
+          </button>
         </div>
       </header>
 
@@ -127,7 +172,7 @@ const Solution = () => {
         <motion.div
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="bg-gradient-to-r from-green-500/20 to-emerald-500/20 border border-green-500/30 rounded-2xl p-4 mb-6 text-center"
+          className="bg-gradient-to-r from-green-500/20 to-emerald-500/20 border border-green-500/30 rounded-2xl p-4 mb-4 text-center"
         >
           <div className="flex items-center justify-center gap-2 mb-1">
             <Check className="w-5 h-5 text-green-500" />
@@ -139,31 +184,16 @@ const Solution = () => {
           </p>
         </motion.div>
 
-        {/* Progress */}
-        <div className="mb-4">
-          <div className="flex justify-between text-sm mb-2">
-            <span className="text-muted-foreground">Step {currentStep + 1} of {totalMoves}</span>
-            <span className="font-mono font-bold text-lg">{moves[currentStep]?.notation}</span>
-          </div>
-          <div className="w-full h-2 bg-secondary rounded-full overflow-hidden">
-            <motion.div
-              className="h-full bg-gradient-to-r from-cyan to-hot-pink"
-              animate={{ width: `${progress}%` }}
-              transition={{ duration: 0.3 }}
-            />
-          </div>
-        </div>
-
         {/* All Moves Display */}
         <div className="mb-4 p-3 rounded-xl bg-secondary/50 border border-border">
           <div className="flex flex-wrap gap-1.5 justify-center">
             {moves.map((move, index) => (
               <button
                 key={index}
-                onClick={() => setCurrentStep(index)}
+                onClick={() => setCurrentStep(index + 1)}
                 className={`px-2 py-1 rounded font-mono text-sm transition-all ${
                   index === currentStep
-                    ? 'bg-primary text-primary-foreground scale-110'
+                    ? 'bg-primary text-primary-foreground scale-110 ring-2 ring-primary/50'
                     : index < currentStep
                     ? 'bg-green-500/20 text-green-500'
                     : 'bg-muted text-muted-foreground hover:bg-muted/80'
@@ -175,82 +205,77 @@ const Solution = () => {
           </div>
         </div>
 
-        {/* 3D Cube */}
+        {/* 3D Cube with Highlight */}
         <motion.div
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
-          className="flex justify-center mb-6"
+          className={`flex justify-center mb-4 rounded-3xl transition-shadow duration-300 ${highlightClass}`}
         >
           <Suspense fallback={
-            <div className="w-[280px] h-[280px] flex items-center justify-center bg-secondary/20 rounded-2xl">
+            <div className="w-[260px] h-[260px] flex items-center justify-center bg-secondary/20 rounded-2xl">
               <div className="w-12 h-12 border-4 border-primary/30 border-t-primary rounded-full animate-spin" />
             </div>
           }>
-            <RubiksCube3D size={280} autoRotate={false} />
+            <RubiksCube3D size={260} autoRotate={false} />
           </Suspense>
         </motion.div>
 
-        {/* Move Description */}
+        {/* Current Move Display */}
         <motion.div
           key={currentStep}
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="glass-card text-center mb-6"
+          className="glass-card text-center mb-4"
         >
-          <p className="text-lg font-medium">{moves[currentStep]?.description}</p>
+          {currentStep === 0 ? (
+            <p className="text-muted-foreground">Press play to start solving</p>
+          ) : currentStep > totalMoves ? (
+            <div className="flex items-center justify-center gap-2">
+              <Check className="w-5 h-5 text-green-500" />
+              <p className="font-bold text-green-500">Cube Solved!</p>
+            </div>
+          ) : (
+            <>
+              <div className="text-4xl font-mono font-bold mb-2 gradient-text">
+                {currentMove?.notation}
+              </div>
+              {learningMode && (
+                <p className="text-sm text-muted-foreground">
+                  {currentMove?.description}
+                </p>
+              )}
+              {nextMove && learningMode && (
+                <p className="text-xs text-muted-foreground mt-2">
+                  Next: <span className="font-mono">{nextMove.notation}</span>
+                </p>
+              )}
+            </>
+          )}
         </motion.div>
 
         {/* Playback Controls */}
-        <div className="flex items-center justify-center gap-4 mb-6">
-          <button
-            onClick={handlePrev}
-            disabled={currentStep === 0}
-            className="p-3 rounded-full bg-secondary hover:bg-secondary/80 transition-colors disabled:opacity-50"
-          >
-            <SkipBack className="w-6 h-6" />
-          </button>
-          
-          <button
-            onClick={() => setIsPlaying(!isPlaying)}
-            className="p-4 rounded-full bg-primary hover:bg-primary/90 transition-colors"
-          >
-            {isPlaying ? (
-              <Pause className="w-8 h-8" />
-            ) : (
-              <Play className="w-8 h-8 ml-1" />
-            )}
-          </button>
-          
-          <button
-            onClick={handleNext}
-            disabled={currentStep === totalMoves - 1}
-            className="p-3 rounded-full bg-secondary hover:bg-secondary/80 transition-colors disabled:opacity-50"
-          >
-            <SkipForward className="w-6 h-6" />
-          </button>
-        </div>
-
-        {/* Speed Controls */}
-        <div className="flex justify-center gap-2 mb-8">
-          {(['slow', 'normal', 'fast'] as const).map((s) => (
-            <button
-              key={s}
-              onClick={() => setSpeed(s)}
-              className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
-                speed === s
-                  ? 'bg-primary text-primary-foreground'
-                  : 'bg-secondary text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              {s.charAt(0).toUpperCase() + s.slice(1)}
-            </button>
-          ))}
+        <div className="mb-6">
+          <SolveControls
+            isPlaying={isPlaying}
+            onPlay={() => setIsPlaying(true)}
+            onPause={() => setIsPlaying(false)}
+            onStepForward={handleStepForward}
+            onStepBack={handleStepBack}
+            onRestart={handleRestart}
+            currentStep={currentStep}
+            totalSteps={totalMoves}
+            speed={speed}
+            onSpeedChange={setSpeed}
+            soundEnabled={soundEnabled}
+            onSoundToggle={() => setSoundEnabled(!soundEnabled)}
+            learningMode={learningMode}
+          />
         </div>
 
         {/* Action Buttons */}
         <div className="space-y-3 max-w-md mx-auto">
           <button
-            onClick={() => navigate('/')}
+            onClick={() => navigate('/home')}
             className="btn-primary w-full h-14 flex items-center justify-center gap-2"
           >
             <RotateCcw className="w-5 h-5" />
