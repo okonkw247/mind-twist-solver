@@ -1,19 +1,28 @@
-import { useState, Suspense } from 'react';
+import { useState, Suspense, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ArrowLeft, ChevronLeft, ChevronRight, Check, RotateCcw, Loader2 } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, ChevronRight, Check, RotateCcw, Loader2, Crown, Clock } from 'lucide-react';
 import RubiksCube3D from '@/components/RubiksCube3D';
 import ColorPicker from '@/components/ColorPicker';
 import FaceGrid from '@/components/FaceGrid';
+import ColorValidation from '@/components/ColorValidation';
 import { useCubeState } from '@/hooks/useCubeState';
 import { solveCube } from '@/lib/cubeSolver';
 import { useToast } from '@/hooks/use-toast';
+
+// Free attempts tracking
+const FREE_ATTEMPTS = 3;
 
 const ManualInput = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [selectedColor, setSelectedColor] = useState('red');
   const [isSolving, setIsSolving] = useState(false);
+  const [showValidation, setShowValidation] = useState(false);
+  const [freeAttempts, setFreeAttempts] = useState(() => {
+    const saved = localStorage.getItem('jsn_free_attempts');
+    return saved ? parseInt(saved, 10) : FREE_ATTEMPTS;
+  });
   
   const {
     cubeState,
@@ -33,17 +42,69 @@ const ManualInput = () => {
     faceOrder,
   } = useCubeState(3);
 
+  // Calculate color counts for validation
+  const colorCounts = useMemo(() => {
+    const counts: Record<string, number> = {
+      red: 0, white: 0, green: 0, orange: 0, yellow: 0, blue: 0
+    };
+    
+    Object.values(cubeState).forEach(face => {
+      face.forEach(color => {
+        if (color && color !== 'empty' && counts[color] !== undefined) {
+          counts[color]++;
+        }
+      });
+    });
+
+    return Object.entries(counts).map(([color, count]) => ({
+      color,
+      count,
+      expected: 9,
+    }));
+  }, [cubeState]);
+
+  // Check for invalid color counts
+  useEffect(() => {
+    const hasInvalid = colorCounts.some(c => c.count > c.expected);
+    if (hasInvalid) {
+      setShowValidation(true);
+    }
+  }, [colorCounts]);
+
   const handleCellClick = (index: number) => {
     setStickerOnCurrentFace(index, selectedColor);
   };
 
   const handleSolve = async () => {
+    // Check color validation first
+    const invalidColors = colorCounts.filter(c => c.count !== c.expected);
+    if (invalidColors.length > 0) {
+      setShowValidation(true);
+      toast({
+        variant: "destructive",
+        title: "Invalid Cube State",
+        description: "Each color must appear exactly 9 times",
+      });
+      return;
+    }
+
+    // Check free attempts
+    if (freeAttempts <= 0) {
+      navigate('/premium');
+      return;
+    }
+
     setIsSolving(true);
     
     try {
       const result = await solveCube(cubeState);
       
       if (result.success && result.solution) {
+        // Decrement free attempts
+        const newAttempts = freeAttempts - 1;
+        setFreeAttempts(newAttempts);
+        localStorage.setItem('jsn_free_attempts', newAttempts.toString());
+
         // Navigate to solution page with the solution data
         navigate('/solution', { 
           state: { 
@@ -72,8 +133,25 @@ const ManualInput = () => {
 
   return (
     <div className="min-h-screen bg-background">
+      {/* Free Attempts Banner */}
+      <div className="fixed top-0 left-0 right-0 z-50 bg-gradient-to-r from-cyan/90 to-blue/90 backdrop-blur-sm">
+        <div className="flex items-center justify-between px-4 py-2">
+          <div className="flex items-center gap-2">
+            <Clock className="w-4 h-4" />
+            <span className="text-sm font-medium">{freeAttempts} free attempts left</span>
+          </div>
+          <button
+            onClick={() => navigate('/premium')}
+            className="flex items-center gap-1 px-3 py-1 rounded-full bg-white text-background text-sm font-bold"
+          >
+            <Crown className="w-3 h-3" />
+            Upgrade now
+          </button>
+        </div>
+      </div>
+
       {/* Header */}
-      <header className="fixed top-0 left-0 right-0 z-50 bg-background border-b border-border">
+      <header className="fixed top-10 left-0 right-0 z-40 bg-background border-b border-border">
         <div className="flex items-center gap-3 px-4 py-3">
           <button
             onClick={() => navigate(-1)}
@@ -93,7 +171,7 @@ const ManualInput = () => {
         </div>
       </header>
 
-      <main className="pt-16 pb-8 px-4">
+      <main className="pt-24 pb-8 px-4">
         {/* Progress */}
         <div className="mb-4 text-center">
           <p className="text-sm text-muted-foreground mb-2">
@@ -107,6 +185,32 @@ const ManualInput = () => {
               transition={{ duration: 0.3 }}
             />
           </div>
+        </div>
+
+        {/* Color Count Indicators */}
+        <div className="flex justify-center gap-1 mb-4">
+          {colorCounts.map(({ color, count }) => {
+            const isValid = count <= 9;
+            const colorMap: Record<string, string> = {
+              red: '#dc2626', white: '#f5f5f5', green: '#22c55e',
+              orange: '#f97316', yellow: '#ffd700', blue: '#2563eb'
+            };
+            
+            return (
+              <div
+                key={color}
+                className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold border-2 ${
+                  !isValid ? 'border-destructive animate-pulse' : 'border-transparent'
+                }`}
+                style={{ backgroundColor: colorMap[color] }}
+                title={`${color}: ${count}/9`}
+              >
+                <span className={color === 'white' || color === 'yellow' ? 'text-gray-800' : 'text-white'}>
+                  {count}
+                </span>
+              </div>
+            );
+          })}
         </div>
 
         {/* Face indicators */}
@@ -140,12 +244,12 @@ const ManualInput = () => {
           className="flex justify-center mb-6"
         >
           <Suspense fallback={
-            <div className="w-[250px] h-[250px] flex items-center justify-center bg-secondary/20 rounded-2xl">
+            <div className="w-[200px] h-[200px] flex items-center justify-center bg-secondary/20 rounded-2xl">
               <div className="w-12 h-12 border-4 border-primary/30 border-t-primary rounded-full animate-spin" />
             </div>
           }>
             <RubiksCube3D 
-              size={250} 
+              size={200} 
               autoRotate={false}
               cubeState={Object.values(cubeState)}
             />
@@ -153,14 +257,15 @@ const ManualInput = () => {
         </motion.div>
 
         {/* Current Face Label */}
-        <motion.h2
+        <motion.div
           key={currentFaceLabel}
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="text-xl font-semibold text-center mb-4"
+          className="text-center mb-4"
         >
-          {currentFaceLabel}
-        </motion.h2>
+          <span className="text-sm text-muted-foreground">Face {currentFaceIndex + 1}</span>
+          <h2 className="text-xl font-semibold">{currentFaceLabel}</h2>
+        </motion.div>
 
         {/* Face Grid */}
         <motion.div
@@ -168,7 +273,7 @@ const ManualInput = () => {
           initial={{ opacity: 0, x: 20 }}
           animate={{ opacity: 1, x: 0 }}
           exit={{ opacity: 0, x: -20 }}
-          className="flex justify-center mb-8"
+          className="flex justify-center mb-6"
         >
           <FaceGrid
             faceColors={currentFaceColors}
@@ -178,7 +283,7 @@ const ManualInput = () => {
         </motion.div>
 
         {/* Color Picker */}
-        <div className="mb-8">
+        <div className="mb-6">
           <ColorPicker
             selectedColor={selectedColor}
             onSelectColor={setSelectedColor}
@@ -193,8 +298,9 @@ const ManualInput = () => {
             className="btn-secondary flex-1 flex items-center justify-center gap-2 h-14 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <ChevronLeft className="w-5 h-5" />
-            Previous
+            Prev
           </button>
+          
           <button
             onClick={nextFace}
             disabled={currentFaceIndex === 5}
@@ -227,6 +333,13 @@ const ManualInput = () => {
           </button>
         </div>
       </main>
+
+      {/* Color Validation Warning */}
+      <ColorValidation
+        colorCounts={colorCounts}
+        visible={showValidation}
+        onDismiss={() => setShowValidation(false)}
+      />
     </div>
   );
 };
