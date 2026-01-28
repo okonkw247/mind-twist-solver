@@ -7,7 +7,7 @@ import ColorPicker from '@/components/ColorPicker';
 import FaceGrid from '@/components/FaceGrid';
 import ColorValidation from '@/components/ColorValidation';
 import { useCubeState } from '@/hooks/useCubeState';
-import { solveCube } from '@/lib/cubeSolver';
+import { getSolutionMoves } from '@/lib/kociembaSolver';
 import { useToast } from '@/hooks/use-toast';
 
 // Free attempts tracking
@@ -97,9 +97,9 @@ const ManualInput = () => {
     setIsSolving(true);
     
     try {
-      const result = await solveCube(cubeState);
+      const result = await getSolutionMoves(cubeState);
       
-      if (result.success && result.solution) {
+      if (result.success && result.moves) {
         // Decrement free attempts
         const newAttempts = freeAttempts - 1;
         setFreeAttempts(newAttempts);
@@ -108,8 +108,8 @@ const ManualInput = () => {
         // Navigate to solution page with the solution data
         navigate('/solution', { 
           state: { 
-            solution: result.solution,
-            moveCount: result.moveCount,
+            solution: result.moves,
+            moveCount: result.moves.length,
             cubeState 
           } 
         });
