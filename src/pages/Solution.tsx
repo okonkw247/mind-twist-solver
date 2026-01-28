@@ -1,25 +1,14 @@
-import { useState, Suspense, useEffect } from 'react';
+import { useState, Suspense, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { ArrowLeft, Share2, Copy, RotateCcw, Check, Sparkles, GraduationCap, Zap } from 'lucide-react';
-import RubiksCube3D from '@/components/RubiksCube3D';
+import AnimatedRubiksCube, { AnimatedCubeHandle } from '@/components/AnimatedRubiksCube';
 import SolveControls from '@/components/SolveControls';
 import confetti from 'canvas-confetti';
-import { CubeMove } from '@/lib/cubeSolver';
+import { CubeMove, parseSolution } from '@/lib/kociembaSolver';
 
-// Default solution for demo
-const defaultMoves: CubeMove[] = [
-  { notation: "R", face: "R", direction: "clockwise", description: "Rotate right face clockwise" },
-  { notation: "U", face: "U", direction: "clockwise", description: "Rotate upper face clockwise" },
-  { notation: "R'", face: "R", direction: "counter-clockwise", description: "Rotate right face counter-clockwise" },
-  { notation: "U'", face: "U", direction: "counter-clockwise", description: "Rotate upper face counter-clockwise" },
-  { notation: "R", face: "R", direction: "clockwise", description: "Rotate right face clockwise" },
-  { notation: "U", face: "U", direction: "clockwise", description: "Rotate upper face clockwise" },
-  { notation: "R'", face: "R", direction: "counter-clockwise", description: "Rotate right face counter-clockwise" },
-  { notation: "F", face: "F", direction: "clockwise", description: "Rotate front face clockwise" },
-  { notation: "R", face: "R", direction: "clockwise", description: "Rotate right face clockwise" },
-  { notation: "F'", face: "F", direction: "counter-clockwise", description: "Rotate front face counter-clockwise" },
-];
+// Default solution for demo - use parseSolution to create proper CubeMove objects
+const defaultMoves: CubeMove[] = parseSolution("R U R' U' R' F R2 U' R' F'");
 
 interface LocationState {
   solution?: CubeMove[];
@@ -40,6 +29,7 @@ const Solution = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const locationState = location.state as LocationState | null;
+  const cubeRef = useRef<AnimatedCubeHandle>(null);
   
   const [currentStep, setCurrentStep] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -47,10 +37,20 @@ const Solution = () => {
   const [copied, setCopied] = useState(false);
   const [learningMode, setLearningMode] = useState(true);
   const [soundEnabled, setSoundEnabled] = useState(false);
+  const [isAnimating, setIsAnimating] = useState(false);
 
   // Use solution from navigation state or default
   const moves = locationState?.solution || defaultMoves;
   const totalMoves = moves.length;
+  
+  // Get animation duration based on speed
+  const getAnimationDuration = () => {
+    switch (speed) {
+      case 'slow': return 1200;
+      case 'fast': return 300;
+      default: return 600;
+    }
+  };
 
   // Confetti effect on mount
   useEffect(() => {
@@ -61,14 +61,22 @@ const Solution = () => {
     });
   }, []);
 
+  // Execute a single move with animation
+  const executeMove = async (move: CubeMove) => {
+    if (!cubeRef.current) return;
+    
+    setIsAnimating(true);
+    await cubeRef.current.executeMove(move, getAnimationDuration());
+    setIsAnimating(false);
+  };
+
   // Auto-play logic
   useEffect(() => {
-    if (isPlaying && currentStep < totalMoves) {
-      const delay = speed === 'slow' ? 2500 : speed === 'fast' ? 600 : 1200;
-      const timer = setTimeout(() => {
-        if (currentStep < totalMoves) {
-          setCurrentStep(prev => prev + 1);
-        }
+    if (isPlaying && currentStep < totalMoves && !isAnimating) {
+      const runNextMove = async () => {
+        const move = moves[currentStep];
+        await executeMove(move);
+        
         if (currentStep >= totalMoves - 1) {
           setIsPlaying(false);
           // Celebration confetti on completion
@@ -77,14 +85,19 @@ const Solution = () => {
             spread: 100,
             origin: { y: 0.6 }
           });
+        } else {
+          setCurrentStep(prev => prev + 1);
         }
-      }, delay);
-      return () => clearTimeout(timer);
+      };
+      
+      runNextMove();
     }
-  }, [isPlaying, currentStep, speed, totalMoves]);
+  }, [isPlaying, currentStep, isAnimating, totalMoves]);
 
-  const handleStepForward = () => {
-    if (currentStep < totalMoves) {
+  const handleStepForward = async () => {
+    if (currentStep < totalMoves && !isAnimating) {
+      const move = moves[currentStep];
+      await executeMove(move);
       setCurrentStep(prev => prev + 1);
     }
   };
@@ -92,6 +105,8 @@ const Solution = () => {
   const handleStepBack = () => {
     if (currentStep > 0) {
       setCurrentStep(prev => prev - 1);
+      // Reset cube animation (would need inverse move in full implementation)
+      cubeRef.current?.reset();
     }
   };
 
@@ -123,10 +138,11 @@ const Solution = () => {
   const handleRestart = () => {
     setCurrentStep(0);
     setIsPlaying(false);
+    cubeRef.current?.reset();
   };
 
   const currentMove = currentStep > 0 ? moves[currentStep - 1] : null;
-  const nextMove = moves[currentStep];
+  const nextMove = currentStep < totalMoves ? moves[currentStep] : null;
   const highlightClass = nextMove ? faceHighlightColors[nextMove.face] || '' : '';
 
   return (
@@ -205,7 +221,7 @@ const Solution = () => {
           </div>
         </div>
 
-        {/* 3D Cube with Highlight */}
+        {/* 3D Animated Cube with Highlight */}
         <motion.div
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
@@ -216,7 +232,13 @@ const Solution = () => {
               <div className="w-12 h-12 border-4 border-primary/30 border-t-primary rounded-full animate-spin" />
             </div>
           }>
-            <RubiksCube3D size={260} autoRotate={false} />
+            <AnimatedRubiksCube 
+              ref={cubeRef}
+              size={260} 
+              onMoveComplete={(move) => {
+                console.log('Move completed:', move.notation);
+              }}
+            />
           </Suspense>
         </motion.div>
 
