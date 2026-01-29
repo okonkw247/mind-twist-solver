@@ -1,11 +1,11 @@
-import { useState, Suspense, useEffect, useRef } from 'react';
+import { useState, Suspense, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { ArrowLeft, Share2, Copy, RotateCcw, Check, Sparkles, GraduationCap, Zap } from 'lucide-react';
 import AnimatedRubiksCube, { AnimatedCubeHandle } from '@/components/AnimatedRubiksCube';
 import SolveControls from '@/components/SolveControls';
 import confetti from 'canvas-confetti';
-import { CubeMove, parseSolution } from '@/lib/kociembaSolver';
+import { CubeMove, parseSolution, invertSolution } from '@/lib/kociembaSolver';
 
 // Default solution for demo - use parseSolution to create proper CubeMove objects
 const defaultMoves: CubeMove[] = parseSolution("R U R' U' R' F R2 U' R' F'");
@@ -25,6 +25,12 @@ const faceHighlightColors: Record<string, string> = {
   B: 'shadow-[0_0_30px_rgba(37,99,235,0.6)]',
 };
 
+// Get inverse of a single move
+function getInverseMove(move: CubeMove): CubeMove {
+  const inversed = invertSolution([move]);
+  return inversed[0];
+}
+
 const Solution = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -38,19 +44,22 @@ const Solution = () => {
   const [learningMode, setLearningMode] = useState(true);
   const [soundEnabled, setSoundEnabled] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
+  
+  // Track executed moves for proper step back
+  const executedMovesRef = useRef<CubeMove[]>([]);
 
   // Use solution from navigation state or default
   const moves = locationState?.solution || defaultMoves;
   const totalMoves = moves.length;
   
   // Get animation duration based on speed
-  const getAnimationDuration = () => {
+  const getAnimationDuration = useCallback(() => {
     switch (speed) {
       case 'slow': return 1200;
       case 'fast': return 300;
       default: return 600;
     }
-  };
+  }, [speed]);
 
   // Confetti effect on mount
   useEffect(() => {
@@ -62,13 +71,24 @@ const Solution = () => {
   }, []);
 
   // Execute a single move with animation
-  const executeMove = async (move: CubeMove) => {
+  const executeMove = useCallback(async (move: CubeMove) => {
     if (!cubeRef.current) return;
     
     setIsAnimating(true);
     await cubeRef.current.executeMove(move, getAnimationDuration());
+    executedMovesRef.current.push(move);
     setIsAnimating(false);
-  };
+  }, [getAnimationDuration]);
+
+  // Execute inverse move for step back
+  const executeInverseMove = useCallback(async (move: CubeMove) => {
+    if (!cubeRef.current) return;
+    
+    const inverse = getInverseMove(move);
+    setIsAnimating(true);
+    await cubeRef.current.executeMove(inverse, getAnimationDuration());
+    setIsAnimating(false);
+  }, [getAnimationDuration]);
 
   // Auto-play logic
   useEffect(() => {
@@ -85,14 +105,13 @@ const Solution = () => {
             spread: 100,
             origin: { y: 0.6 }
           });
-        } else {
-          setCurrentStep(prev => prev + 1);
         }
+        setCurrentStep(prev => prev + 1);
       };
       
       runNextMove();
     }
-  }, [isPlaying, currentStep, isAnimating, totalMoves]);
+  }, [isPlaying, currentStep, isAnimating, totalMoves, moves, executeMove]);
 
   const handleStepForward = async () => {
     if (currentStep < totalMoves && !isAnimating) {
@@ -102,11 +121,14 @@ const Solution = () => {
     }
   };
 
-  const handleStepBack = () => {
-    if (currentStep > 0) {
-      setCurrentStep(prev => prev - 1);
-      // Reset cube animation (would need inverse move in full implementation)
-      cubeRef.current?.reset();
+  const handleStepBack = async () => {
+    if (currentStep > 0 && !isAnimating) {
+      // Get the last executed move and invert it
+      const lastMove = executedMovesRef.current.pop();
+      if (lastMove) {
+        await executeInverseMove(lastMove);
+        setCurrentStep(prev => prev - 1);
+      }
     }
   };
 
@@ -138,6 +160,7 @@ const Solution = () => {
   const handleRestart = () => {
     setCurrentStep(0);
     setIsPlaying(false);
+    executedMovesRef.current = [];
     cubeRef.current?.reset();
   };
 
