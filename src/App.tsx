@@ -15,6 +15,7 @@ import Solution from "./pages/Solution";
 import Premium from "./pages/Premium";
 import Timer from "./pages/Timer";
 import PlayCube from "./pages/PlayCube";
+import Solver from "./pages/Solver";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -67,6 +68,7 @@ const AppContent = () => {
       <Route path="/timer" element={<Timer />} />
       <Route path="/play-cube" element={<PlayCube />} />
       <Route path="/compete" element={<PlayCube />} />
+      <Route path="/solver" element={<Solver />} />
       <Route path="/settings" element={<Premium />} />
       
       {/* Catch-all */}
