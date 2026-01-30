@@ -17,9 +17,9 @@ const featureCards = [
   {
     id: 'solver',
     icon: Edit3,
-    label: 'Manual Cube Solver',
-    description: 'Enter colors manually',
-    route: '/manual-input',
+    label: 'Visual Solver',
+    description: 'Paint & solve with animations',
+    route: '/solver',
     color: 'from-cyan to-blue',
   },
 ];
@@ -42,7 +42,8 @@ const quickActions = [
 
 const menuItems = [
   { label: 'Home', route: '/home' },
-  { label: 'Manual Solver', route: '/manual-input' },
+  { label: 'Visual Solver', route: '/solver' },
+  { label: 'Manual Input', route: '/manual-input' },
   { label: 'Camera Scan', route: '/camera' },
   { label: 'Play Cube', route: '/play-cube' },
   { label: 'Timer', route: '/timer' },
