@@ -1,9 +1,12 @@
+// Play Cube - Real-time 3D cube with move controls
+// Uses the unified RealTimeCube3D engine for consistent behavior
+
 import { Suspense, useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, Play, Pause, RotateCcw, X, ChevronUp, ChevronDown, Shuffle } from 'lucide-react';
-import AnimatedRubiksCube, { AnimatedCubeHandle } from '@/components/AnimatedRubiksCube';
-import { generateScramble, parseSolution, CubeMove } from '@/lib/kociembaSolver';
+import { ArrowLeft, Play, Pause, RotateCcw, X, ChevronUp, ChevronDown, Shuffle, Move3D } from 'lucide-react';
+import RealTimeCube3D, { RealTimeCubeHandle } from '@/components/RealTimeCube3D';
+import { generateScramble, parseSolution } from '@/lib/kociembaSolver';
 
 type Difficulty = 'very_easy' | 'easy' | 'medium' | 'hard';
 
@@ -38,7 +41,7 @@ const moveButtons = [
 
 const PlayCube = () => {
   const navigate = useNavigate();
-  const cubeRef = useRef<AnimatedCubeHandle>(null);
+  const cubeRef = useRef<RealTimeCubeHandle>(null);
   
   const [showTimeModal, setShowTimeModal] = useState(false);
   const [selectedMinutes, setSelectedMinutes] = useState(2);
@@ -55,27 +58,26 @@ const PlayCube = () => {
 
   // Execute a single move via the shared cube ref
   const executeMove = useCallback(async (moveNotation: string) => {
-    if (!cubeRef.current || isAnimating) return;
+    if (!cubeRef.current || isAnimating || isScrambling) return;
     
-    const moves = parseSolution(moveNotation);
-    if (moves.length === 0) return;
-    
-    const move = moves[0];
     setIsAnimating(true);
-    await cubeRef.current.executeMove(move, 400);
+    await cubeRef.current.executeMove(moveNotation, 350);
     setMoveHistory(prev => [...prev, moveNotation]);
     setIsAnimating(false);
-  }, [isAnimating]);
+  }, [isAnimating, isScrambling]);
 
-  // Execute scramble sequence
+  // Execute scramble sequence with real-time animation
   const executeScramble = useCallback(async (scrambleString: string) => {
     if (!cubeRef.current) return;
     
     setIsScrambling(true);
     const moves = parseSolution(scrambleString);
     
+    // Execute each move sequentially with animation
     for (const move of moves) {
-      await cubeRef.current.executeMove(move, 200);
+      await cubeRef.current.executeMove(move.notation, 180);
+      // Small delay between scramble moves
+      await new Promise(r => setTimeout(r, 30));
     }
     
     setIsScrambling(false);
@@ -141,6 +143,13 @@ const PlayCube = () => {
     generateNewScramble(false);
   };
 
+  const handleUndo = async () => {
+    if (moveHistory.length === 0 || isAnimating || isScrambling) return;
+    
+    await cubeRef.current?.undoMove();
+    setMoveHistory(prev => prev.slice(0, -1));
+  };
+
   const handleTimeConfirm = () => {
     const totalSeconds = selectedMinutes * 60 + selectedSeconds;
     setTimeLimit(totalSeconds);
@@ -162,7 +171,13 @@ const PlayCube = () => {
           <ArrowLeft className="w-6 h-6" />
         </button>
         <h1 className="text-lg font-semibold flex-1 text-center">Play Cube</h1>
-        <div className="w-10" />
+        <button
+          onClick={() => cubeRef.current?.resetCamera()}
+          className="p-2 rounded-lg hover:bg-secondary transition-colors"
+          title="Reset Camera"
+        >
+          <Move3D className="w-5 h-5" />
+        </button>
       </header>
 
       <main className="flex-1 flex flex-col overflow-y-auto">
@@ -201,18 +216,25 @@ const PlayCube = () => {
           </button>
         </div>
 
-        {/* 3D Animated Cube */}
-        <div className="flex items-center justify-center py-4">
+        {/* 3D Animated Cube - Real-time engine */}
+        <div className="flex items-center justify-center py-4 relative">
           <Suspense fallback={
             <div className="w-64 h-64 flex items-center justify-center">
               <div className="w-12 h-12 border-4 border-primary/30 border-t-primary rounded-full animate-spin" />
             </div>
           }>
-            <AnimatedRubiksCube 
-              ref={cubeRef} 
-              size={240} 
+            <RealTimeCube3D
+              ref={cubeRef}
+              size={260}
+              enableZoom={true}
+              enablePan={false}
             />
           </Suspense>
+          
+          {/* Camera hint */}
+          <div className="absolute bottom-2 left-1/2 -translate-x-1/2 text-xs text-muted-foreground bg-secondary/60 px-2 py-1 rounded-full">
+            Drag to rotate • Pinch to zoom
+          </div>
         </div>
 
         {/* Scramble Display */}
@@ -237,20 +259,33 @@ const PlayCube = () => {
 
         {/* Move Buttons Grid */}
         <div className="px-4 py-2">
-          <p className="text-xs text-muted-foreground mb-2 text-center">
-            {isScrambling ? 'Scrambling...' : gameStarted ? 'Tap to rotate faces' : 'Start to begin'}
-          </p>
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-xs text-muted-foreground">
+              {isScrambling ? 'Scrambling...' : gameStarted ? 'Tap to rotate faces' : 'Start to begin'}
+            </p>
+            {gameStarted && moveHistory.length > 0 && (
+              <button
+                onClick={handleUndo}
+                disabled={isAnimating || isScrambling}
+                className="flex items-center gap-1 text-xs text-primary hover:text-primary/80 disabled:opacity-50"
+              >
+                <RotateCcw className="w-3 h-3" />
+                Undo
+              </button>
+            )}
+          </div>
           <div className="grid grid-cols-6 gap-1.5">
             {moveButtons.map(({ move, label }) => (
-              <button
+              <motion.button
                 key={move}
+                whileTap={{ scale: 0.92 }}
                 onClick={() => executeMove(move)}
                 disabled={!gameStarted || isAnimating || isScrambling}
                 className="h-10 rounded-lg bg-secondary hover:bg-secondary/80 font-mono text-sm font-bold 
-                         disabled:opacity-40 disabled:cursor-not-allowed transition-all active:scale-95"
+                         disabled:opacity-40 disabled:cursor-not-allowed transition-all"
               >
                 {label}
-              </button>
+              </motion.button>
             ))}
           </div>
         </div>
@@ -267,11 +302,13 @@ const PlayCube = () => {
               <RotateCcw className="w-5 h-5" />
             </button>
 
-            <button
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
               onClick={isPlaying ? () => setIsPlaying(false) : handleStart}
               disabled={isScrambling || isAnimating}
               className="px-10 py-3 rounded-full bg-gradient-to-r from-purple-500 to-cyan-500 font-bold 
-                       transition-transform hover:scale-105 disabled:opacity-50"
+                       transition-all disabled:opacity-50"
             >
               {isScrambling ? (
                 'Scrambling...'
@@ -291,7 +328,7 @@ const PlayCube = () => {
                   Start
                 </>
               )}
-            </button>
+            </motion.button>
           </div>
 
           {/* Difficulty Selector */}
