@@ -1,5 +1,5 @@
 // JSN Solving - Full Visual Solver Page
-// Features: 3D interactive cube, manual color mode, visual algorithm, smooth animations
+// Real-time 3D cube engine with continuous rendering and independent camera
 
 import { useState, Suspense, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -15,18 +15,17 @@ import {
   RotateCcw,
   Loader2,
   ZoomIn,
-  ZoomOut
+  ZoomOut,
+  Move3D
 } from 'lucide-react';
-import InteractiveCube3D, { InteractiveCubeHandle, FaceName, COLORS } from '@/components/InteractiveCube3D';
+import RealTimeCube3D, { RealTimeCubeHandle, FaceName, COLOR_HEX } from '@/components/RealTimeCube3D';
 import AlgorithmDisplay from '@/components/AlgorithmDisplay';
 import ColorPalette from '@/components/ColorPalette';
 import SolveAnimationControls, { AnimationSpeed } from '@/components/SolveAnimationControls';
 import confetti from 'canvas-confetti';
-import { CubeMove, parseSolution, invertSolution, getSolutionMoves } from '@/lib/kociembaSolver';
+import { CubeMove, parseSolution, getSolutionMoves } from '@/lib/kociembaSolver';
+import { FACE_TO_KEY, getInverseNotation } from '@/lib/cubeStateManager';
 import { useToast } from '@/hooks/use-toast';
-
-// Default solution for demo
-const defaultMoves: CubeMove[] = parseSolution("R U R' U' R' F R2 U' R' F'");
 
 interface LocationState {
   solution?: CubeMove[];
@@ -34,26 +33,11 @@ interface LocationState {
   cubeState?: Record<string, string[]>;
 }
 
-// Face to state key mapping
-const FACE_TO_KEY: Record<FaceName, string> = {
-  U: 'up',
-  D: 'down',
-  L: 'left',
-  R: 'right',
-  F: 'front',
-  B: 'back',
-};
-
-function getInverseMove(move: CubeMove): CubeMove {
-  const inversed = invertSolution([move]);
-  return inversed[0];
-}
-
 const SolverPage = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const locationState = location.state as LocationState | null;
-  const cubeRef = useRef<InteractiveCubeHandle>(null);
+  const cubeRef = useRef<RealTimeCubeHandle>(null);
   const { toast } = useToast();
   
   // Mode states
@@ -63,7 +47,6 @@ const SolverPage = () => {
   // Cube state for manual mode
   const [cubeState, setCubeState] = useState<Record<string, string[]>>(() => {
     if (locationState?.cubeState) return locationState.cubeState;
-    // Initialize with empty state for manual mode
     return {
       front: Array(9).fill('empty'),
       back: Array(9).fill('empty'),
@@ -78,13 +61,15 @@ const SolverPage = () => {
   const [moves, setMoves] = useState<CubeMove[]>(locationState?.solution || []);
   const [currentStep, setCurrentStep] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
   const [speed, setSpeed] = useState<AnimationSpeed>('normal');
   const [isAnimating, setIsAnimating] = useState(false);
   const [isSolving, setIsSolving] = useState(false);
   const [copied, setCopied] = useState(false);
   
   // Track executed moves for step back
-  const executedMovesRef = useRef<CubeMove[]>([]);
+  const executedMovesRef = useRef<string[]>([]);
+  const playingRef = useRef(false);
   
   // Color counts for validation
   const colorCounts = useMemo(() => {
@@ -150,46 +135,43 @@ const SolverPage = () => {
     if (!cubeRef.current) return;
     
     setIsAnimating(true);
-    await cubeRef.current.executeMove(move, getAnimationDuration());
-    executedMovesRef.current.push(move);
+    await cubeRef.current.executeMove(move.notation, getAnimationDuration());
+    executedMovesRef.current.push(move.notation);
     
     // Pause between moves for readability
     await new Promise(r => setTimeout(r, getPauseDuration()));
     setIsAnimating(false);
   }, [getAnimationDuration, getPauseDuration]);
   
-  // Execute inverse move for step back
-  const executeInverseMove = useCallback(async (move: CubeMove) => {
-    if (!cubeRef.current) return;
-    
-    const inverse = getInverseMove(move);
-    setIsAnimating(true);
-    await cubeRef.current.executeMove(inverse, getAnimationDuration());
-    setIsAnimating(false);
-  }, [getAnimationDuration]);
-  
   // Auto-play logic
   useEffect(() => {
-    if (isPlaying && currentStep < moves.length && !isAnimating) {
-      const runNextMove = async () => {
-        const move = moves[currentStep];
-        await executeMove(move);
-        
-        if (currentStep >= moves.length - 1) {
-          setIsPlaying(false);
-          // Celebration!
-          confetti({
-            particleCount: 200,
-            spread: 100,
-            origin: { y: 0.6 }
-          });
-        }
-        setCurrentStep(prev => prev + 1);
-      };
+    playingRef.current = isPlaying;
+  }, [isPlaying]);
+  
+  useEffect(() => {
+    if (!isPlaying || isPaused || isAnimating || currentStep >= moves.length) return;
+    
+    const runNextMove = async () => {
+      if (!playingRef.current) return;
       
-      runNextMove();
-    }
-  }, [isPlaying, currentStep, isAnimating, moves, executeMove]);
+      const move = moves[currentStep];
+      await executeMove(move);
+      
+      if (!playingRef.current) return;
+      
+      if (currentStep >= moves.length - 1) {
+        setIsPlaying(false);
+        confetti({
+          particleCount: 200,
+          spread: 100,
+          origin: { y: 0.6 }
+        });
+      }
+      setCurrentStep(prev => prev + 1);
+    };
+    
+    runNextMove();
+  }, [isPlaying, isPaused, isAnimating, currentStep, moves, executeMove]);
   
   // Handlers
   const handleStepForward = async () => {
@@ -201,23 +183,48 @@ const SolverPage = () => {
   
   const handleStepBack = async () => {
     if (currentStep > 0 && !isAnimating) {
-      const lastMove = executedMovesRef.current.pop();
-      if (lastMove) {
-        await executeInverseMove(lastMove);
+      const lastNotation = executedMovesRef.current.pop();
+      if (lastNotation && cubeRef.current) {
+        const inverse = getInverseNotation(lastNotation);
+        setIsAnimating(true);
+        await cubeRef.current.executeMove(inverse, getAnimationDuration());
+        setIsAnimating(false);
         setCurrentStep(prev => prev - 1);
       }
     }
   };
   
+  const handlePause = () => {
+    setIsPlaying(false);
+    setIsPaused(true);
+    cubeRef.current?.pauseAnimation();
+  };
+  
+  const handlePlay = () => {
+    if (isPaused) {
+      cubeRef.current?.resumeAnimation();
+    }
+    setIsPaused(false);
+    setIsPlaying(true);
+  };
+  
   const handleRestart = () => {
     setCurrentStep(0);
     setIsPlaying(false);
+    setIsPaused(false);
     executedMovesRef.current = [];
-    cubeRef.current?.reset();
+    
+    // Reset cube and reapply initial state
+    if (cubeRef.current) {
+      if (locationState?.cubeState) {
+        cubeRef.current.setCubeState(locationState.cubeState);
+      } else {
+        cubeRef.current.reset();
+      }
+    }
   };
   
   const handleSolve = async () => {
-    // Validate cube
     const invalidColors = Object.entries(colorCounts).filter(([_, count]) => count !== 9);
     if (invalidColors.length > 0) {
       toast({
@@ -247,7 +254,6 @@ const SolverPage = () => {
           description: `${result.moves.length} moves to solve`,
         });
         
-        // Celebration
         confetti({
           particleCount: 100,
           spread: 70,
@@ -313,11 +319,9 @@ const SolverPage = () => {
   
   const toggleMode = () => {
     if (!isManualMode) {
-      // Switch to manual
       setIsManualMode(true);
       setIsPlaying(false);
     } else {
-      // Try to solve
       if (isCubeComplete) {
         handleSolve();
       }
@@ -424,6 +428,14 @@ const SolverPage = () => {
             >
               <RotateCcw className="w-4 h-4" />
             </motion.button>
+            <motion.button
+              whileHover={{ scale: 1.1 }}
+              whileTap={{ scale: 0.9 }}
+              className="p-2 rounded-lg bg-secondary/80 backdrop-blur-sm hover:bg-secondary transition-all"
+              title="Orbit controls active"
+            >
+              <Move3D className="w-4 h-4" />
+            </motion.button>
           </div>
           
           <Suspense fallback={
@@ -431,14 +443,15 @@ const SolverPage = () => {
               <div className="w-12 h-12 border-4 border-primary/30 border-t-primary rounded-full animate-spin" />
             </div>
           }>
-            <InteractiveCube3D
+            <RealTimeCube3D
               ref={cubeRef}
               size={300}
-              cubeState={isManualMode ? cubeState : undefined}
+              initialState={isManualMode ? cubeState : undefined}
               isManualMode={isManualMode}
               onFaceletClick={handleFaceletClick}
               highlightedFace={highlightedFace}
               enableZoom={true}
+              enablePan={false}
             />
           </Suspense>
         </motion.div>
@@ -455,7 +468,7 @@ const SolverPage = () => {
               {/* Instructions */}
               <div className="text-center">
                 <p className="text-sm text-muted-foreground">
-                  Tap cube faces to paint colors • Rotate cube with drag
+                  Tap cube faces to paint colors • Drag to rotate camera • Pinch to zoom
                 </p>
               </div>
               
@@ -488,7 +501,7 @@ const SolverPage = () => {
                     >
                       <div 
                         className="w-3 h-3 rounded-sm" 
-                        style={{ backgroundColor: COLORS[color] }}
+                        style={{ backgroundColor: COLOR_HEX[color as keyof typeof COLOR_HEX] }}
                       />
                       <span>{count}/9</span>
                     </div>
@@ -573,8 +586,8 @@ const SolverPage = () => {
                 totalSteps={moves.length}
                 speed={speed}
                 isAnimating={isAnimating}
-                onPlay={() => setIsPlaying(true)}
-                onPause={() => setIsPlaying(false)}
+                onPlay={handlePlay}
+                onPause={handlePause}
                 onStepForward={handleStepForward}
                 onStepBack={handleStepBack}
                 onRestart={handleRestart}
