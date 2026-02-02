@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Crown, Check, X, Sparkles, Zap, Volume2, Wifi } from 'lucide-react';
+import { Crown, Check, X, Sparkles, Zap, Volume2, Wifi, ArrowLeft } from 'lucide-react';
 
 const features = [
   { name: '2×2 & 3×3 Solver', free: true, premium: true },
@@ -11,7 +11,7 @@ const features = [
   { name: 'AI Voice Guidance', free: false, premium: true },
   { name: 'Ad-Free Experience', free: false, premium: true },
   { name: 'Offline Mode', free: false, premium: true },
-  { name: 'Speed Controls', free: false, premium: true },
+  { name: 'Unlimited Hints', free: false, premium: true },
   { name: 'VIP Support', free: false, premium: true },
 ];
 
@@ -20,30 +20,38 @@ const Premium = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Gradient Header */}
-      <div className="gradient-main pt-16 pb-12 px-4 text-center relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-b from-transparent to-background" />
-        
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="relative z-10"
+      {/* Header */}
+      <header className="flex items-center gap-4 px-4 py-4 safe-top">
+        <button
+          onClick={() => navigate(-1)}
+          className="btn-icon"
+          aria-label="Go back"
         >
-          <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-white/10 backdrop-blur-sm flex items-center justify-center">
-            <Crown className="w-10 h-10 text-yellow-400" />
-          </div>
-          
-          <h1 className="text-3xl font-bold text-white mb-2">Go Premium</h1>
-          <p className="text-white/70">Unlock the full power of JSN Solving</p>
+          <ArrowLeft className="w-6 h-6" />
+        </button>
+        <h1 className="text-lg font-bold tracking-wider flex-1">UPGRADE</h1>
+      </header>
+
+      {/* Hero Section */}
+      <div className="px-4 py-8 text-center">
+        <motion.div
+          initial={{ scale: 0.8, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          className="w-24 h-24 mx-auto mb-6 rounded-full bg-primary/20 border-2 border-primary flex items-center justify-center"
+          style={{ boxShadow: '0 0 40px hsl(var(--primary) / 0.3)' }}
+        >
+          <Crown className="w-12 h-12 text-gold" />
         </motion.div>
+        
+        <h1 className="text-3xl font-bold mb-2">Go Premium</h1>
+        <p className="text-muted-foreground">Unlock the full power of JSN Solver</p>
       </div>
 
-      <main className="px-4 pb-8 -mt-4">
+      <main className="px-4 pb-8">
         {/* Premium Benefits */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
           className="grid grid-cols-2 gap-3 mb-8"
         >
           {[
@@ -52,14 +60,17 @@ const Premium = () => {
             { icon: Wifi, label: 'Offline Mode', desc: 'Solve anywhere' },
             { icon: Sparkles, label: 'No Ads', desc: 'Clean experience' },
           ].map((item, index) => (
-            <div
+            <motion.div
               key={item.label}
-              className="glass-card flex flex-col items-center text-center p-4"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: index * 0.1 }}
+              className="glass-card flex flex-col items-center text-center py-5"
             >
               <item.icon className="w-8 h-8 text-primary mb-2" />
               <h3 className="font-semibold text-sm">{item.label}</h3>
               <p className="text-xs text-muted-foreground">{item.desc}</p>
-            </div>
+            </motion.div>
           ))}
         </motion.div>
 
@@ -85,7 +96,7 @@ const Premium = () => {
                 <span className="flex-1 text-sm">{feature.name}</span>
                 <span className="w-16 flex justify-center">
                   {feature.free ? (
-                    <Check className="w-5 h-5 text-green-500" />
+                    <Check className="w-5 h-5 text-primary" />
                   ) : (
                     <X className="w-5 h-5 text-muted-foreground/50" />
                   )}

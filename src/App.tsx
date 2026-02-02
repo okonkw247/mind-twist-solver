@@ -8,7 +8,6 @@ import { AnimatePresence } from 'framer-motion';
 import SplashScreen from "./pages/SplashScreen";
 import WelcomeScreen from "./pages/WelcomeScreen";
 import Home from "./pages/Home";
-import Index from "./pages/Index";
 import ManualInput from "./pages/ManualInput";
 import CameraInput from "./pages/CameraInput";
 import Solution from "./pages/Solution";
@@ -16,13 +15,14 @@ import Premium from "./pages/Premium";
 import Timer from "./pages/Timer";
 import PlayCube from "./pages/PlayCube";
 import Solver from "./pages/Solver";
+import Collection from "./pages/Collection";
+import LevelComplete from "./pages/LevelComplete";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
 
 const AppContent = () => {
   const [showSplash, setShowSplash] = useState(() => {
-    // Only show splash if user hasn't seen it this session
     const sessionSplashShown = sessionStorage.getItem('jsn_splash_shown');
     return !sessionSplashShown;
   });
@@ -36,7 +36,6 @@ const AppContent = () => {
     sessionStorage.setItem('jsn_splash_shown', 'true');
   };
 
-  // Show splash screen overlay
   if (showSplash) {
     return (
       <AnimatePresence mode="wait">
@@ -60,7 +59,6 @@ const AppContent = () => {
       
       {/* Main app routes */}
       <Route path="/home" element={<Home />} />
-      <Route path="/index" element={<Index />} />
       <Route path="/manual-input" element={<ManualInput />} />
       <Route path="/camera" element={<CameraInput />} />
       <Route path="/solution" element={<Solution />} />
@@ -69,6 +67,8 @@ const AppContent = () => {
       <Route path="/play-cube" element={<PlayCube />} />
       <Route path="/compete" element={<PlayCube />} />
       <Route path="/solver" element={<Solver />} />
+      <Route path="/collection" element={<Collection />} />
+      <Route path="/level-complete" element={<LevelComplete />} />
       <Route path="/settings" element={<Premium />} />
       
       {/* Catch-all */}
