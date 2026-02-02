@@ -56,11 +56,11 @@ export default {
           blue: "hsl(var(--cube-blue))",
           green: "hsl(var(--cube-green))",
         },
-        // Gradient colors
+        // Custom accent colors
+        gold: "hsl(var(--gold))",
         cyan: "hsl(var(--cyan))",
-        "hot-pink": "hsl(var(--pink-hot))",
-        magenta: "hsl(var(--magenta))",
         purple: "hsl(var(--purple))",
+        magenta: "hsl(var(--magenta))",
         sidebar: {
           DEFAULT: "hsl(var(--sidebar-background))",
           foreground: "hsl(var(--sidebar-foreground))",

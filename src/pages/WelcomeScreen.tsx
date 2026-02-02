@@ -1,8 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Mail, Lock, User } from 'lucide-react';
-import jsnLogo from '@/assets/jsn-logo.png';
+import { ArrowLeft, Mail, Lock, User, Box } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 
@@ -17,7 +16,6 @@ const WelcomeScreen = () => {
   const [name, setName] = useState('');
 
   const handleGetStarted = () => {
-    // For now, skip auth and go directly to home
     localStorage.setItem('jsn_user_welcomed', 'true');
     navigate('/home');
   };
@@ -34,7 +32,6 @@ const WelcomeScreen = () => {
       return;
     }
 
-    // For now, simulate auth success
     localStorage.setItem('jsn_user_email', email);
     localStorage.setItem('jsn_user_welcomed', 'true');
     toast({
@@ -47,34 +44,38 @@ const WelcomeScreen = () => {
   if (mode === 'welcome') {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center px-6 bg-background">
-        {/* Logo */}
+        {/* Abstract cube logo */}
         <motion.div
-          initial={{ scale: 0.8, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          transition={{ duration: 0.5 }}
-          className="mb-8"
+          initial={{ scale: 0.8, opacity: 0, rotateY: -20 }}
+          animate={{ scale: 1, opacity: 1, rotateY: 0 }}
+          transition={{ duration: 0.8 }}
+          className="mb-8 relative"
         >
-          <img 
-            src={jsnLogo} 
-            alt="JSN Solving" 
-            className="w-40 h-40 object-contain"
-          />
+          <div className="w-40 h-40 relative flex items-center justify-center">
+            <div className="absolute w-28 h-28 bg-card rounded-3xl transform rotate-12 border border-primary/30" />
+            <div className="relative grid grid-cols-2 gap-2 p-3">
+              <div className="w-10 h-10 rounded-lg bg-cube-red shadow-lg" />
+              <div className="w-10 h-10 rounded-lg bg-cube-orange shadow-lg" />
+              <div className="w-10 h-10 rounded-lg bg-cube-yellow shadow-lg" />
+              <div className="w-10 h-10 rounded-lg bg-cube-green shadow-lg" />
+            </div>
+          </div>
         </motion.div>
 
         {/* Tagline */}
         <motion.h1
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2, duration: 0.5 }}
-          className="text-3xl md:text-4xl font-bold text-center text-foreground mb-2"
+          transition={{ delay: 0.2 }}
+          className="text-3xl font-bold text-center text-foreground mb-2"
         >
           Solve Any Cube.
         </motion.h1>
         <motion.p
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3, duration: 0.5 }}
-          className="text-2xl md:text-3xl font-bold text-center gradient-text mb-16"
+          transition={{ delay: 0.3 }}
+          className="text-2xl font-bold text-center gradient-text mb-16"
         >
           Learn Step by Step.
         </motion.p>
@@ -83,7 +84,7 @@ const WelcomeScreen = () => {
         <motion.div
           initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.5, duration: 0.5 }}
+          transition={{ delay: 0.5 }}
           className="w-full max-w-sm space-y-4"
         >
           <button
@@ -106,16 +107,16 @@ const WelcomeScreen = () => {
   return (
     <div className="min-h-screen flex flex-col bg-background">
       {/* Header */}
-      <header className="flex items-center gap-4 px-4 py-4">
+      <header className="flex items-center gap-4 px-4 py-4 safe-top">
         <button
           onClick={() => setMode('welcome')}
-          className="p-2 rounded-full hover:bg-secondary transition-colors"
+          className="btn-icon"
           aria-label="Go back"
         >
           <ArrowLeft className="w-6 h-6" />
         </button>
-        <h1 className="text-lg font-semibold">
-          {mode === 'signin' ? 'Sign In' : 'Create Account'}
+        <h1 className="text-lg font-semibold tracking-wider">
+          {mode === 'signin' ? 'SIGN IN' : 'CREATE ACCOUNT'}
         </h1>
       </header>
 

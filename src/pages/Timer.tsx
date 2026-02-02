@@ -1,9 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, RefreshCw, Trash2, Trophy, Clock, X, AlertCircle } from 'lucide-react';
+import { ArrowLeft, RefreshCw, Trash2, Trophy, Clock, X, AlertCircle, Star } from 'lucide-react';
 import { useWCATimer, formatWCATime, formatTimeWithPenalty } from '@/hooks/useWCATimer';
 import { generateScramble } from '@/lib/kociembaSolver';
+import BottomNav from '@/components/BottomNav';
+import StatCard from '@/components/StatCard';
 
 const Timer = () => {
   const navigate = useNavigate();
@@ -44,7 +46,6 @@ const Timer = () => {
   // Handle spacebar/tap to start/stop
   const onInteraction = useCallback(() => {
     if (phase === 'stopped' && lastSavedTime === null) {
-      // Save the record
       saveRecord(scramble);
       setLastSavedTime(solveTime);
     } else if (phase !== 'stopped') {
@@ -69,42 +70,40 @@ const Timer = () => {
   const isInspecting = phase === 'inspection';
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
+    <div className="min-h-screen bg-background flex flex-col pb-24">
       {/* Header */}
-      <header className="fixed top-0 left-0 right-0 z-50 bg-background/95 backdrop-blur-sm border-b border-border">
-        <div className="flex items-center gap-3 px-4 py-3">
-          <button
-            onClick={() => navigate('/')}
-            className="p-2 rounded-lg hover:bg-secondary transition-colors"
-            aria-label="Go back"
-          >
-            <ArrowLeft className="w-5 h-5" />
-          </button>
-          <h1 className="text-lg font-semibold flex-1">WCA Timer</h1>
-          <button
-            onClick={() => setShowRecords(true)}
-            className="p-2 rounded-lg hover:bg-secondary transition-colors relative"
-            aria-label="View records"
-          >
-            <Trophy className="w-5 h-5" />
-            {records.length > 0 && (
-              <span className="absolute -top-1 -right-1 w-5 h-5 bg-primary text-xs rounded-full flex items-center justify-center">
-                {records.length > 99 ? '99+' : records.length}
-              </span>
-            )}
-          </button>
-        </div>
+      <header className="flex items-center justify-between px-4 py-4 safe-top">
+        <button
+          onClick={() => navigate('/home')}
+          className="btn-icon"
+          aria-label="Go back"
+        >
+          <ArrowLeft className="w-6 h-6" />
+        </button>
+        <h1 className="text-xl font-bold tracking-wider">WCA TIMER</h1>
+        <button
+          onClick={() => setShowRecords(true)}
+          className="btn-icon relative"
+          aria-label="View records"
+        >
+          <Trophy className="w-6 h-6" />
+          {records.length > 0 && (
+            <span className="absolute -top-1 -right-1 w-5 h-5 bg-primary text-xs rounded-full flex items-center justify-center font-bold">
+              {records.length > 99 ? '99+' : records.length}
+            </span>
+          )}
+        </button>
       </header>
 
-      <main className="flex-1 pt-16 pb-8 px-4 flex flex-col">
+      <main className="flex-1 px-4 flex flex-col">
         {/* Scramble Display */}
         <motion.div
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="mt-4 mb-6"
+          className="mb-6"
         >
           <div className="flex items-center justify-between mb-2">
-            <span className="text-sm text-muted-foreground">Scramble</span>
+            <span className="text-xs text-muted-foreground uppercase tracking-wider">Scramble</span>
             <button
               onClick={newScramble}
               className="p-2 rounded-lg hover:bg-secondary transition-colors"
@@ -113,8 +112,8 @@ const Timer = () => {
               <RefreshCw className="w-4 h-4" />
             </button>
           </div>
-          <div className="p-4 rounded-xl bg-secondary/50 border border-border">
-            <p className="font-mono text-sm leading-relaxed text-center break-all">
+          <div className="glass-card">
+            <p className="font-mono text-sm leading-relaxed text-center">
               {scramble}
             </p>
           </div>
@@ -128,7 +127,7 @@ const Timer = () => {
             className={`mb-4 p-3 rounded-xl flex items-center gap-2 ${
               warning.type === 'DNF' || warning.type === '+2'
                 ? 'bg-destructive/20 text-destructive'
-                : 'bg-yellow-500/20 text-yellow-500'
+                : 'bg-gold/20 text-gold'
             }`}
           >
             <AlertCircle className="w-5 h-5" />
@@ -148,19 +147,13 @@ const Timer = () => {
               animate={{ scale: 1, opacity: 1 }}
               className="text-center"
             >
-              <p className="text-muted-foreground mb-2">Inspection</p>
-              <p className={`text-8xl md:text-9xl font-bold tabular-nums ${
+              <p className="text-muted-foreground mb-2 uppercase tracking-wider">Inspection</p>
+              <p className={`text-8xl font-bold tabular-nums ${
                 inspectionRemaining <= 3 ? 'text-destructive' : 
-                inspectionRemaining <= 8 ? 'text-yellow-500' : 'text-foreground'
+                inspectionRemaining <= 8 ? 'text-gold' : 'text-foreground'
               }`}>
                 {inspectionRemaining}
               </p>
-              {warning.type === '8s' && (
-                <p className="mt-2 text-yellow-500 font-bold animate-pulse">8 seconds!</p>
-              )}
-              {warning.type === '12s' && (
-                <p className="mt-2 text-destructive font-bold animate-pulse">12 seconds!</p>
-              )}
             </motion.div>
           ) : (
             <motion.div
@@ -169,16 +162,15 @@ const Timer = () => {
               animate={{ scale: 1, opacity: 1 }}
               className="text-center"
             >
-              <p className={`text-7xl md:text-8xl font-bold tabular-nums ${
+              <p className={`text-7xl font-bold tabular-nums ${
                 isRunning ? 'text-primary' : 'text-foreground'
               }`}>
                 {formatWCATime(solveTime)}
               </p>
               
-              {/* Penalty indicator */}
               {penalty && phase === 'stopped' && (
                 <p className={`mt-2 text-xl font-bold ${
-                  penalty === 'DNF' ? 'text-destructive' : 'text-yellow-500'
+                  penalty === 'DNF' ? 'text-destructive' : 'text-gold'
                 }`}>
                   {penalty}
                 </p>
@@ -186,7 +178,7 @@ const Timer = () => {
               
               {phase === 'idle' && (
                 <p className="mt-4 text-muted-foreground">
-                  Tap or press Space to start inspection
+                  Tap or press Space to start
                 </p>
               )}
               
@@ -196,11 +188,10 @@ const Timer = () => {
                   animate={{ opacity: 1 }}
                   className="mt-4"
                 >
-                  <p className="text-green-500 mb-4">
+                  <p className="text-primary mb-4">
                     Tap to save • New scramble to reset
                   </p>
                   
-                  {/* Penalty buttons */}
                   <div className="flex gap-2 justify-center">
                     <button
                       onClick={(e) => {
@@ -209,8 +200,8 @@ const Timer = () => {
                       }}
                       className={`px-4 py-2 rounded-lg font-bold transition-colors ${
                         penalty === '+2' 
-                          ? 'bg-yellow-500 text-background' 
-                          : 'bg-secondary hover:bg-secondary/80'
+                          ? 'bg-gold text-background' 
+                          : 'bg-secondary hover:bg-muted'
                       }`}
                     >
                       +2
@@ -223,7 +214,7 @@ const Timer = () => {
                       className={`px-4 py-2 rounded-lg font-bold transition-colors ${
                         penalty === 'DNF' 
                           ? 'bg-destructive text-destructive-foreground' 
-                          : 'bg-secondary hover:bg-secondary/80'
+                          : 'bg-secondary hover:bg-muted'
                       }`}
                     >
                       DNF
@@ -238,7 +229,7 @@ const Timer = () => {
                   animate={{ opacity: 1, y: 0 }}
                   className="mt-4"
                 >
-                  <p className="text-green-500 mb-2">✓ Saved!</p>
+                  <p className="text-primary mb-2">✓ Saved!</p>
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
@@ -255,31 +246,26 @@ const Timer = () => {
         </div>
 
         {/* Stats Bar */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="grid grid-cols-3 gap-2 mt-4"
-        >
-          <div className="glass-card text-center py-3">
-            <p className="text-xs text-muted-foreground mb-1">Best</p>
-            <p className="font-bold text-green-500">
-              {stats.best ? formatWCATime(stats.best) : '-'}
-            </p>
-          </div>
-          <div className="glass-card text-center py-3">
-            <p className="text-xs text-muted-foreground mb-1">Ao5</p>
-            <p className="font-bold">
-              {stats.ao5 ? formatWCATime(stats.ao5) : '-'}
-            </p>
-          </div>
-          <div className="glass-card text-center py-3">
-            <p className="text-xs text-muted-foreground mb-1">Ao12</p>
-            <p className="font-bold">
-              {stats.ao12 ? formatWCATime(stats.ao12) : '-'}
-            </p>
-          </div>
-        </motion.div>
+        <div className="grid grid-cols-3 gap-2 mt-4">
+          <StatCard 
+            label="Best" 
+            value={stats.best ? formatWCATime(stats.best) : '-'} 
+            className="text-center"
+          />
+          <StatCard 
+            label="Ao5" 
+            value={stats.ao5 ? formatWCATime(stats.ao5) : '-'} 
+            className="text-center"
+          />
+          <StatCard 
+            label="Ao12" 
+            value={stats.ao12 ? formatWCATime(stats.ao12) : '-'} 
+            className="text-center"
+          />
+        </div>
       </main>
+
+      <BottomNav variant="solver" />
 
       {/* Records Sheet */}
       <AnimatePresence>
@@ -299,12 +285,10 @@ const Timer = () => {
               transition={{ type: 'spring', damping: 25, stiffness: 200 }}
               className="fixed bottom-0 left-0 right-0 bg-card rounded-t-3xl z-50 max-h-[80vh] flex flex-col"
             >
-              {/* Handle */}
               <div className="flex justify-center py-3">
                 <div className="w-12 h-1.5 bg-muted rounded-full" />
               </div>
 
-              {/* Header */}
               <div className="flex items-center justify-between px-4 pb-4 border-b border-border">
                 <h2 className="text-lg font-semibold flex items-center gap-2">
                   <Trophy className="w-5 h-5 text-primary" />
@@ -337,13 +321,13 @@ const Timer = () => {
                 <div className="grid grid-cols-4 gap-2 p-4 border-b border-border">
                   <div className="text-center">
                     <p className="text-xs text-muted-foreground">Best</p>
-                    <p className="font-semibold text-green-500 text-sm">
+                    <p className="font-semibold text-primary text-sm">
                       {stats.best ? formatWCATime(stats.best) : '-'}
                     </p>
                   </div>
                   <div className="text-center">
                     <p className="text-xs text-muted-foreground">Worst</p>
-                    <p className="font-semibold text-red-500 text-sm">
+                    <p className="font-semibold text-destructive text-sm">
                       {stats.worst ? formatWCATime(stats.worst) : '-'}
                     </p>
                   </div>
@@ -383,17 +367,14 @@ const Timer = () => {
                         </span>
                         <div className="flex-1">
                           <p className={`font-bold ${
-                            record.finalTime === stats.best ? 'text-green-500' :
-                            record.finalTime === stats.worst ? 'text-red-500' : ''
+                            record.finalTime === stats.best ? 'text-primary' :
+                            record.finalTime === stats.worst ? 'text-destructive' : ''
                           }`}>
                             {formatTimeWithPenalty(record)}
                           </p>
-                          <div className="flex gap-2 text-xs text-muted-foreground">
-                            <span className="truncate max-w-[150px]">{record.scramble}</span>
-                            {record.ao5 && (
-                              <span>Ao5: {formatWCATime(record.ao5)}</span>
-                            )}
-                          </div>
+                          <p className="text-xs text-muted-foreground truncate max-w-[200px]">
+                            {record.scramble}
+                          </p>
                         </div>
                         <button
                           onClick={() => deleteRecord(record.id)}

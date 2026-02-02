@@ -1,4 +1,4 @@
-import { useState, Suspense, useEffect, useMemo } from 'react';
+import { useState, Suspense, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { ArrowLeft, ChevronLeft, ChevronRight, Check, RotateCcw, Loader2, Crown, Clock } from 'lucide-react';
@@ -10,7 +10,6 @@ import { useCubeState } from '@/hooks/useCubeState';
 import { getSolutionMoves } from '@/lib/kociembaSolver';
 import { useToast } from '@/hooks/use-toast';
 
-// Free attempts tracking
 const FREE_ATTEMPTS = 3;
 
 const ManualInput = () => {
@@ -42,7 +41,6 @@ const ManualInput = () => {
     faceOrder,
   } = useCubeState(3);
 
-  // Calculate color counts for validation
   const colorCounts = useMemo(() => {
     const counts: Record<string, number> = {
       red: 0, white: 0, green: 0, orange: 0, yellow: 0, blue: 0
@@ -63,20 +61,11 @@ const ManualInput = () => {
     }));
   }, [cubeState]);
 
-  // Check for invalid color counts
-  useEffect(() => {
-    const hasInvalid = colorCounts.some(c => c.count > c.expected);
-    if (hasInvalid) {
-      setShowValidation(true);
-    }
-  }, [colorCounts]);
-
   const handleCellClick = (index: number) => {
     setStickerOnCurrentFace(index, selectedColor);
   };
 
   const handleSolve = async () => {
-    // Check color validation first
     const invalidColors = colorCounts.filter(c => c.count !== c.expected);
     if (invalidColors.length > 0) {
       setShowValidation(true);
@@ -88,7 +77,6 @@ const ManualInput = () => {
       return;
     }
 
-    // Check free attempts
     if (freeAttempts <= 0) {
       navigate('/premium');
       return;
@@ -100,12 +88,10 @@ const ManualInput = () => {
       const result = await getSolutionMoves(cubeState);
       
       if (result.success && result.moves) {
-        // Decrement free attempts
         const newAttempts = freeAttempts - 1;
         setFreeAttempts(newAttempts);
         localStorage.setItem('jsn_free_attempts', newAttempts.toString());
 
-        // Navigate to solution page with the solution data
         navigate('/solution', { 
           state: { 
             solution: result.moves,
@@ -134,7 +120,7 @@ const ManualInput = () => {
   return (
     <div className="min-h-screen bg-background">
       {/* Free Attempts Banner */}
-      <div className="fixed top-0 left-0 right-0 z-50 bg-gradient-to-r from-cyan/90 to-blue/90 backdrop-blur-sm">
+      <div className="fixed top-0 left-0 right-0 z-50 bg-primary/90 backdrop-blur-sm safe-top">
         <div className="flex items-center justify-between px-4 py-2">
           <div className="flex items-center gap-2">
             <Clock className="w-4 h-4" />
@@ -142,7 +128,7 @@ const ManualInput = () => {
           </div>
           <button
             onClick={() => navigate('/premium')}
-            className="flex items-center gap-1 px-3 py-1 rounded-full bg-white text-background text-sm font-bold"
+            className="flex items-center gap-1 px-3 py-1 rounded-full bg-foreground text-background text-sm font-bold"
           >
             <Crown className="w-3 h-3" />
             Upgrade now
@@ -155,15 +141,15 @@ const ManualInput = () => {
         <div className="flex items-center gap-3 px-4 py-3">
           <button
             onClick={() => navigate(-1)}
-            className="p-2 rounded-lg hover:bg-secondary transition-colors"
+            className="btn-icon"
             aria-label="Go back"
           >
             <ArrowLeft className="w-5 h-5" />
           </button>
-          <h1 className="text-lg font-semibold flex-1">Manual Input</h1>
+          <h1 className="text-lg font-semibold tracking-wider flex-1">MANUAL INPUT</h1>
           <button
             onClick={resetCube}
-            className="p-2 rounded-lg hover:bg-secondary transition-colors"
+            className="btn-icon"
             aria-label="Reset cube"
           >
             <RotateCcw className="w-5 h-5" />
@@ -179,7 +165,7 @@ const ManualInput = () => {
           </p>
           <div className="w-full max-w-xs mx-auto h-2 bg-secondary rounded-full overflow-hidden">
             <motion.div
-              className="h-full bg-gradient-to-r from-cyan to-hot-pink"
+              className="h-full bg-primary"
               initial={{ width: 0 }}
               animate={{ width: `${progress}%` }}
               transition={{ duration: 0.3 }}
@@ -192,8 +178,12 @@ const ManualInput = () => {
           {colorCounts.map(({ color, count }) => {
             const isValid = count <= 9;
             const colorMap: Record<string, string> = {
-              red: '#dc2626', white: '#f5f5f5', green: '#22c55e',
-              orange: '#f97316', yellow: '#ffd700', blue: '#2563eb'
+              red: 'hsl(0, 85%, 50%)', 
+              white: 'hsl(0, 0%, 95%)', 
+              green: 'hsl(140, 80%, 45%)',
+              orange: 'hsl(30, 100%, 50%)', 
+              yellow: 'hsl(48, 100%, 50%)', 
+              blue: 'hsl(220, 100%, 50%)'
             };
             
             return (
@@ -205,7 +195,7 @@ const ManualInput = () => {
                 style={{ backgroundColor: colorMap[color] }}
                 title={`${color}: ${count}/9`}
               >
-                <span className={color === 'white' || color === 'yellow' ? 'text-gray-800' : 'text-white'}>
+                <span className={color === 'white' || color === 'yellow' ? 'text-background' : 'text-foreground'}>
                   {count}
                 </span>
               </div>
@@ -227,7 +217,7 @@ const ManualInput = () => {
                   isCurrent
                     ? 'bg-primary text-primary-foreground scale-110'
                     : isComplete
-                    ? 'bg-green-500/20 text-green-500'
+                    ? 'bg-primary/20 text-primary'
                     : 'bg-secondary text-muted-foreground'
                 }`}
               >
@@ -317,7 +307,7 @@ const ManualInput = () => {
             onClick={handleSolve}
             disabled={!isCubeComplete || isSolving}
             className={`btn-primary w-full h-16 text-lg flex items-center justify-center gap-2 ${
-              !isCubeComplete || isSolving ? 'opacity-50 cursor-not-allowed' : 'animate-pulse-glow'
+              !isCubeComplete || isSolving ? 'opacity-50 cursor-not-allowed' : ''
             }`}
           >
             {isSolving ? (
