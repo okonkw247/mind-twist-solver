@@ -1,17 +1,42 @@
-import { Suspense, useState } from 'react';
+import { Suspense, useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Settings, Trophy, Play, Puzzle, Star } from 'lucide-react';
-import RubiksCube3D from '@/components/RubiksCube3D';
+import RigidCube3D, { RigidCubeHandle } from '@/components/RigidCube3D';
 import BottomNav from '@/components/BottomNav';
 import StatCard from '@/components/StatCard';
+import { generateScramble, parseSolution } from '@/lib/kociembaSolver';
 
 const Home = () => {
   const navigate = useNavigate();
+  const cubeRef = useRef<RigidCubeHandle>(null);
   const [bestTime] = useState('00:42.15');
   const [solveCount] = useState(1284);
   const [currentLevel] = useState(12);
   const [rank] = useState('GRANDMASTER');
+  const [isScrambling, setIsScrambling] = useState(false);
+
+  // Auto-scramble on mount for visual effect
+  useEffect(() => {
+    const doScramble = async () => {
+      if (!cubeRef.current || isScrambling) return;
+      setIsScrambling(true);
+      
+      await new Promise(r => setTimeout(r, 500)); // Wait for render
+      
+      const scramble = generateScramble(8);
+      const moves = parseSolution(scramble);
+      
+      for (const move of moves) {
+        await cubeRef.current.executeMove(move.notation, 200);
+        await new Promise(r => setTimeout(r, 50));
+      }
+      
+      setIsScrambling(false);
+    };
+    
+    doScramble();
+  }, []);
 
   return (
     <div className="min-h-screen bg-background pb-24">
@@ -82,7 +107,7 @@ const Home = () => {
                 <div className="w-12 h-12 border-4 border-primary/30 border-t-primary rounded-full animate-spin" />
               </div>
             }>
-              <RubiksCube3D size={220} autoRotate={true} />
+              <RigidCube3D ref={cubeRef} size={220} />
             </Suspense>
           </div>
         </motion.div>
