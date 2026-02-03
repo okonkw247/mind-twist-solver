@@ -14,14 +14,14 @@ import {
   Check,
   Share2
 } from 'lucide-react';
-import RealTimeCube3D, { RealTimeCubeHandle, FaceName, COLOR_HEX } from '@/components/RealTimeCube3D';
+import RigidCube3D, { RigidCubeHandle, FaceName, COLOR_HEX } from '@/components/RigidCube3D';
 import AlgorithmDisplay from '@/components/AlgorithmDisplay';
 import ColorPalette from '@/components/ColorPalette';
 import BottomNav from '@/components/BottomNav';
 import StatCard from '@/components/StatCard';
 import confetti from 'canvas-confetti';
 import { CubeMove, parseSolution, getSolutionMoves, generateScramble } from '@/lib/kociembaSolver';
-import { FACE_TO_KEY, getInverseNotation } from '@/lib/cubeStateManager';
+import { getInverseMove } from '@/lib/rigidCubeEngine';
 import { useToast } from '@/hooks/use-toast';
 
 interface LocationState {
@@ -34,7 +34,7 @@ const Solver = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const locationState = location.state as LocationState | null;
-  const cubeRef = useRef<RealTimeCubeHandle>(null);
+  const cubeRef = useRef<RigidCubeHandle>(null);
   const { toast } = useToast();
   
   // Timer state
@@ -209,7 +209,7 @@ const Solver = () => {
               <div className="w-12 h-12 border-4 border-primary/30 border-t-primary rounded-full animate-spin" />
             </div>
           }>
-            <RealTimeCube3D
+            <RigidCube3D
               ref={cubeRef}
               size={260}
               enableZoom={true}
