@@ -1,5 +1,5 @@
 /**
- * Rigid-Body 3D Cube Renderer
+ * Rigid-Body 3D Cube Renderer - FIXED VERSION
  * 
  * This component renders a mathematically correct Rubik's Cube:
  * - Each cubie is a real 3D object with position and orientation
@@ -7,6 +7,11 @@
  * - Rotations are animated frame-by-frame using requestAnimationFrame
  * - Camera controls remain fully interactive during animations
  * - State is derived from cubie positions/orientations, NOT from color arrays
+ * 
+ * FIXES APPLIED:
+ * 1. Removed double quaternion application (position + orientation)
+ * 2. Implemented proper group-based rotation for animating cubies
+ * 3. Increased default animation duration for smoother appearance
  */
 
 import { useRef, useState, useCallback, forwardRef, useImperativeHandle, useMemo } from 'react';
@@ -55,39 +60,17 @@ interface AnimationState {
 // Props for a single cubie mesh
 interface CubieMeshProps {
   cubie: RigidCubie;
-  animationRotation?: THREE.Quaternion;
-  isAnimating?: boolean;
   isClickable?: boolean;
   onFaceletClick?: (face: FaceName, cubieId: string) => void;
 }
 
 /**
  * Renders a single cubie with its colors permanently attached
+ * FIXED: No longer handles animation rotation - that's done by parent group
  */
-const CubieMesh = ({ cubie, animationRotation, isAnimating, isClickable, onFaceletClick }: CubieMeshProps) => {
+const CubieMesh = ({ cubie, isClickable, onFaceletClick }: CubieMeshProps) => {
   const meshRef = useRef<THREE.Group>(null);
   const [hovered, setHovered] = useState<string | null>(null);
-  
-  // Calculate world-space position (may be mid-rotation during animation)
-  const displayPosition = useMemo(() => {
-    if (isAnimating && animationRotation) {
-      return cubie.position.clone().applyQuaternion(animationRotation);
-    }
-    return cubie.position.clone();
-  }, [cubie.position, animationRotation, isAnimating]);
-  
-  // Calculate world-space orientation (cubie's orientation + animation rotation)
-  const displayOrientation = useMemo(() => {
-    if (isAnimating && animationRotation) {
-      return animationRotation.clone().multiply(cubie.orientation);
-    }
-    return cubie.orientation.clone();
-  }, [cubie.orientation, animationRotation, isAnimating]);
-  
-  // Convert quaternion to Euler for Three.js group rotation
-  const euler = useMemo(() => {
-    return new THREE.Euler().setFromQuaternion(displayOrientation);
-  }, [displayOrientation]);
   
   // Render facelets in LOCAL space - they're fixed to the cubie
   const facelets = useMemo(() => {
@@ -163,8 +146,8 @@ const CubieMesh = ({ cubie, animationRotation, isAnimating, isClickable, onFacel
   return (
     <group
       ref={meshRef}
-      position={[displayPosition.x, displayPosition.y, displayPosition.z]}
-      quaternion={displayOrientation}
+      position={[cubie.position.x, cubie.position.y, cubie.position.z]}
+      quaternion={cubie.orientation}
     >
       {/* Black cubie body */}
       <RoundedBox args={[0.95, 0.95, 0.95]} radius={0.08} smoothness={4}>
@@ -189,6 +172,7 @@ interface CubeSceneProps {
 
 /**
  * The 3D scene with continuous rendering
+ * FIXED: Uses a rotating group for animating cubies instead of individual rotation
  */
 const CubeScene = ({
   cubies,
@@ -198,13 +182,15 @@ const CubeScene = ({
   onFaceletClick,
   controlsRef,
 }: CubeSceneProps) => {
-  // Current animation rotation (built incrementally each frame)
-  const currentRotationRef = useRef(new THREE.Quaternion());
+  // Reference to the rotating group that holds animating cubies
+  const rotatingGroupRef = useRef<THREE.Group>(null);
   
   // Continuous frame updates
   useFrame(() => {
-    if (!animation) {
-      currentRotationRef.current.identity();
+    if (!animation || !rotatingGroupRef.current) {
+      if (rotatingGroupRef.current) {
+        rotatingGroupRef.current.quaternion.identity();
+      }
       return;
     }
     
@@ -212,7 +198,7 @@ const CubeScene = ({
     if (animation.isPaused) {
       // Keep the paused rotation
       const axis = getMoveAxis(animation.face).normalize();
-      currentRotationRef.current.setFromAxisAngle(axis, animation.pausedAngle);
+      rotatingGroupRef.current.quaternion.setFromAxisAngle(axis, animation.pausedAngle);
       return;
     }
     
@@ -224,9 +210,9 @@ const CubeScene = ({
     const eased = 1 - Math.pow(1 - progress, 3);
     const currentAngle = animation.targetAngle * eased;
     
-    // Build rotation quaternion for current frame
+    // Apply rotation to the GROUP containing all animating cubies
     const axis = getMoveAxis(animation.face).normalize();
-    currentRotationRef.current.setFromAxisAngle(axis, currentAngle);
+    rotatingGroupRef.current.quaternion.setFromAxisAngle(axis, currentAngle);
     
     // Check if animation complete
     if (progress >= 1) {
@@ -244,20 +230,39 @@ const CubeScene = ({
       
       {/* Cube group with base rotation for nice viewing angle */}
       <group rotation={[0.4, -0.5, 0]}>
+        {/* Non-animating cubies - render directly */}
         {cubies.map(cubie => {
           const isAnimating = animation && animation.affectedCubieIds.has(cubie.id);
+          if (isAnimating) return null; // Skip animating cubies here
           
           return (
             <CubieMesh
               key={cubie.id}
               cubie={cubie}
-              animationRotation={isAnimating ? currentRotationRef.current : undefined}
-              isAnimating={isAnimating}
               isClickable={isClickable && !animation}
               onFaceletClick={onFaceletClick}
             />
           );
         })}
+        
+        {/* Animating cubies - inside rotating group */}
+        {animation && (
+          <group ref={rotatingGroupRef}>
+            {cubies.map(cubie => {
+              const isAnimating = animation.affectedCubieIds.has(cubie.id);
+              if (!isAnimating) return null; // Only render animating cubies here
+              
+              return (
+                <CubieMesh
+                  key={cubie.id}
+                  cubie={cubie}
+                  isClickable={false}
+                  onFaceletClick={onFaceletClick}
+                />
+              );
+            })}
+          </group>
+        )}
       </group>
       
       {/* Camera controls - always interactive */}
@@ -373,7 +378,7 @@ const RigidCube3D = forwardRef<RigidCubeHandle, RigidCube3DProps>(
     
     // Expose imperative API
     useImperativeHandle(ref, () => ({
-      executeMove: (notation: string, duration: number = 400): Promise<void> => {
+      executeMove: (notation: string, duration: number = 600): Promise<void> => {
         return new Promise((resolve) => {
           if (animation) {
             resolve();
@@ -406,7 +411,7 @@ const RigidCube3D = forwardRef<RigidCubeHandle, RigidCube3DProps>(
         });
       },
       
-      executeMoves: async (notations: string[], duration: number = 400, delayBetween: number = 100) => {
+      executeMoves: async (notations: string[], duration: number = 600, delayBetween: number = 100) => {
         for (const notation of notations) {
           await new Promise<void>((resolve) => {
             if (animation) {
@@ -514,7 +519,7 @@ const RigidCube3D = forwardRef<RigidCubeHandle, RigidCube3DProps>(
             targetAngle: angle,
             currentAngle: 0,
             startTime: performance.now(),
-            duration: 300,
+            duration: 500,
             notation: inverse,
             isPaused: false,
             pausedAngle: 0,
