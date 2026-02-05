@@ -17,6 +17,8 @@ import PlayCube from "./pages/PlayCube";
 import Solver from "./pages/Solver";
 import Collection from "./pages/Collection";
 import LevelComplete from "./pages/LevelComplete";
+import Settings from "./pages/Settings";
+import Profile from "./pages/Profile";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -69,7 +71,10 @@ const AppContent = () => {
       <Route path="/solver" element={<Solver />} />
       <Route path="/collection" element={<Collection />} />
       <Route path="/level-complete" element={<LevelComplete />} />
-      <Route path="/settings" element={<Premium />} />
+      <Route path="/settings" element={<Settings />} />
+      <Route path="/profile" element={<Profile />} />
+      <Route path="/camera" element={<CameraInput />} />
+      <Route path="/ar-solver" element={<CameraInput />} />
       
       {/* Catch-all */}
       <Route path="*" element={<NotFound />} />
