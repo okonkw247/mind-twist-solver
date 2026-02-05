@@ -1,5 +1,5 @@
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Home, Puzzle, Trophy, User, Map, ShoppingBag, Box, Settings } from 'lucide-react';
+import { Home, Puzzle, Trophy, User, Map, ShoppingBag, Box, Settings, BarChart3, GraduationCap } from 'lucide-react';
 
 interface NavItem {
   icon: React.ElementType;
@@ -8,7 +8,7 @@ interface NavItem {
 }
 
 interface BottomNavProps {
-  variant?: 'home' | 'solver' | 'map' | 'collection';
+  variant?: 'home' | 'solver' | 'map' | 'collection' | 'profile' | 'timer';
 }
 
 const navConfigs: Record<string, NavItem[]> = {
@@ -18,22 +18,32 @@ const navConfigs: Record<string, NavItem[]> = {
     { icon: ShoppingBag, label: 'STORE', path: '/premium' },
   ],
   solver: [
-    { icon: Home, label: 'Home', path: '/home' },
-    { icon: Trophy, label: 'Records', path: '/timer' },
     { icon: Puzzle, label: 'Solver', path: '/solver' },
-    { icon: User, label: 'Profile', path: '/premium' },
+    { icon: Trophy, label: 'Timer', path: '/timer' },
+    { icon: Settings, label: 'Settings', path: '/settings' },
   ],
   map: [
     { icon: Map, label: 'MAP', path: '/play-cube' },
     { icon: Box, label: 'CUBES', path: '/collection' },
     { icon: ShoppingBag, label: 'SHOP', path: '/premium' },
-    { icon: User, label: 'PROFILE', path: '/premium' },
+    { icon: User, label: 'PROFILE', path: '/profile' },
   ],
   collection: [
     { icon: Puzzle, label: 'PLAY', path: '/play-cube' },
     { icon: Box, label: 'SKINS', path: '/collection' },
     { icon: Trophy, label: 'RANK', path: '/timer' },
-    { icon: Settings, label: 'MENU', path: '/premium' },
+    { icon: Settings, label: 'MENU', path: '/settings' },
+  ],
+  profile: [
+    { icon: Puzzle, label: 'Solve', path: '/solver' },
+    { icon: BarChart3, label: 'Rankings', path: '/timer' },
+    { icon: GraduationCap, label: 'Learn', path: '/premium' },
+    { icon: User, label: 'Profile', path: '/profile' },
+  ],
+  timer: [
+    { icon: Puzzle, label: 'Solver', path: '/solver' },
+    { icon: Trophy, label: 'Timer', path: '/timer' },
+    { icon: Settings, label: 'Settings', path: '/settings' },
   ],
 };
 

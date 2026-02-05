@@ -1,27 +1,25 @@
-import { useState, Suspense, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ArrowLeft, ChevronLeft, ChevronRight, Check, RotateCcw, Loader2, Crown, Clock } from 'lucide-react';
-import RubiksCube3D from '@/components/RubiksCube3D';
-import ColorPicker from '@/components/ColorPicker';
-import FaceGrid from '@/components/FaceGrid';
-import ColorValidation from '@/components/ColorValidation';
+import { ArrowLeft, ChevronLeft, ChevronRight, Check, Camera, Video } from 'lucide-react';
 import { useCubeState } from '@/hooks/useCubeState';
 import { getSolutionMoves } from '@/lib/kociembaSolver';
 import { useToast } from '@/hooks/use-toast';
 
-const FREE_ATTEMPTS = 3;
+const CUBE_COLORS = [
+  { name: 'white', hex: 'hsl(0, 0%, 95%)', label: 'W' },
+  { name: 'yellow', hex: 'hsl(48, 100%, 50%)', label: 'Y' },
+  { name: 'orange', hex: 'hsl(30, 100%, 50%)', label: 'O' },
+  { name: 'red', hex: 'hsl(0, 85%, 50%)', label: 'R' },
+  { name: 'green', hex: 'hsl(140, 80%, 45%)', label: 'G' },
+  { name: 'blue', hex: 'hsl(220, 100%, 50%)', label: 'B' },
+];
 
 const ManualInput = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const [selectedColor, setSelectedColor] = useState('red');
+  const [selectedColor, setSelectedColor] = useState('white');
   const [isSolving, setIsSolving] = useState(false);
-  const [showValidation, setShowValidation] = useState(false);
-  const [freeAttempts, setFreeAttempts] = useState(() => {
-    const saved = localStorage.getItem('jsn_free_attempts');
-    return saved ? parseInt(saved, 10) : FREE_ATTEMPTS;
-  });
   
   const {
     cubeState,
@@ -32,10 +30,8 @@ const ManualInput = () => {
     nextFace,
     prevFace,
     goToFace,
-    resetCube,
     filledCount,
     totalCount,
-    progress,
     isFaceComplete,
     isCubeComplete,
     faceOrder,
@@ -54,11 +50,7 @@ const ManualInput = () => {
       });
     });
 
-    return Object.entries(counts).map(([color, count]) => ({
-      color,
-      count,
-      expected: 9,
-    }));
+    return counts;
   }, [cubeState]);
 
   const handleCellClick = (index: number) => {
@@ -66,19 +58,14 @@ const ManualInput = () => {
   };
 
   const handleSolve = async () => {
-    const invalidColors = colorCounts.filter(c => c.count !== c.expected);
+    // Check color counts
+    const invalidColors = Object.entries(colorCounts).filter(([_, count]) => count !== 9);
     if (invalidColors.length > 0) {
-      setShowValidation(true);
       toast({
         variant: "destructive",
         title: "Invalid Cube State",
         description: "Each color must appear exactly 9 times",
       });
-      return;
-    }
-
-    if (freeAttempts <= 0) {
-      navigate('/premium');
       return;
     }
 
@@ -88,10 +75,6 @@ const ManualInput = () => {
       const result = await getSolutionMoves(cubeState);
       
       if (result.success && result.moves) {
-        const newAttempts = freeAttempts - 1;
-        setFreeAttempts(newAttempts);
-        localStorage.setItem('jsn_free_attempts', newAttempts.toString());
-
         navigate('/solution', { 
           state: { 
             solution: result.moves,
@@ -117,219 +100,172 @@ const ManualInput = () => {
     }
   };
 
-  return (
-    <div className="min-h-screen bg-background">
-      {/* Free Attempts Banner */}
-      <div className="fixed top-0 left-0 right-0 z-50 bg-primary/90 backdrop-blur-sm safe-top">
-        <div className="flex items-center justify-between px-4 py-2">
-          <div className="flex items-center gap-2">
-            <Clock className="w-4 h-4" />
-            <span className="text-sm font-medium">{freeAttempts} free attempts left</span>
-          </div>
-          <button
-            onClick={() => navigate('/premium')}
-            className="flex items-center gap-1 px-3 py-1 rounded-full bg-foreground text-background text-sm font-bold"
-          >
-            <Crown className="w-3 h-3" />
-            Upgrade now
-          </button>
-        </div>
-      </div>
+  const progress = (currentFaceIndex + 1) / 6;
 
+  return (
+    <div className="min-h-screen bg-background flex flex-col">
       {/* Header */}
-      <header className="fixed top-10 left-0 right-0 z-40 bg-background border-b border-border">
-        <div className="flex items-center gap-3 px-4 py-3">
-          <button
-            onClick={() => navigate(-1)}
-            className="btn-icon"
-            aria-label="Go back"
-          >
-            <ArrowLeft className="w-5 h-5" />
-          </button>
-          <h1 className="text-lg font-semibold tracking-wider flex-1">MANUAL INPUT</h1>
-          <button
-            onClick={resetCube}
-            className="btn-icon"
-            aria-label="Reset cube"
-          >
-            <RotateCcw className="w-5 h-5" />
-          </button>
-        </div>
+      <header className="flex items-center justify-between px-4 py-4 safe-top">
+        <button
+          onClick={() => navigate(-1)}
+          className="btn-icon"
+          aria-label="Go back"
+        >
+          <ArrowLeft className="w-6 h-6" />
+        </button>
+        <h1 className="text-xl font-bold tracking-wider">Manual Face Input</h1>
+        <button
+          onClick={() => navigate('/camera')}
+          className="btn-icon"
+          aria-label="Camera"
+        >
+          <Camera className="w-6 h-6" />
+        </button>
       </header>
 
-      <main className="pt-24 pb-8 px-4">
-        {/* Progress */}
-        <div className="mb-4 text-center">
-          <p className="text-sm text-muted-foreground mb-2">
-            {filledCount} / {totalCount} stickers colored
-          </p>
-          <div className="w-full max-w-xs mx-auto h-2 bg-secondary rounded-full overflow-hidden">
+      <main className="flex-1 px-4 flex flex-col">
+        {/* Face Progress */}
+        <div className="mb-4">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-sm font-semibold">Face Progress</span>
+            <span className="text-sm text-muted-foreground">{currentFaceIndex + 1}/6</span>
+          </div>
+          <div className="h-2 bg-secondary rounded-full overflow-hidden">
             <motion.div
               className="h-full bg-primary"
               initial={{ width: 0 }}
-              animate={{ width: `${progress}%` }}
+              animate={{ width: `${progress * 100}%` }}
               transition={{ duration: 0.3 }}
             />
           </div>
         </div>
 
-        {/* Color Count Indicators */}
-        <div className="flex justify-center gap-1 mb-4">
-          {colorCounts.map(({ color, count }) => {
-            const isValid = count <= 9;
-            const colorMap: Record<string, string> = {
-              red: 'hsl(0, 85%, 50%)', 
-              white: 'hsl(0, 0%, 95%)', 
-              green: 'hsl(140, 80%, 45%)',
-              orange: 'hsl(30, 100%, 50%)', 
-              yellow: 'hsl(48, 100%, 50%)', 
-              blue: 'hsl(220, 100%, 50%)'
-            };
-            
-            return (
-              <div
-                key={color}
-                className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold border-2 ${
-                  !isValid ? 'border-destructive animate-pulse' : 'border-transparent'
-                }`}
-                style={{ backgroundColor: colorMap[color] }}
-                title={`${color}: ${count}/9`}
-              >
-                <span className={color === 'white' || color === 'yellow' ? 'text-background' : 'text-foreground'}>
-                  {count}
-                </span>
-              </div>
-            );
-          })}
+        {/* Current Face Label */}
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold uppercase tracking-wide">{currentFaceLabel}</h2>
+          <div className="flex items-center gap-2">
+            <div 
+              className="w-4 h-4 rounded"
+              style={{ backgroundColor: CUBE_COLORS.find(c => c.name === selectedColor)?.hex }}
+            />
+            <span className="text-sm text-primary">Editing</span>
+          </div>
         </div>
 
-        {/* Face indicators */}
-        <div className="flex justify-center gap-2 mb-4">
-          {faceOrder.map((face, index) => {
-            const isComplete = isFaceComplete(face);
-            const isCurrent = index === currentFaceIndex;
+        {/* 3x3 Face Grid with Mini Cube Preview */}
+        <div className="relative flex-1 flex items-center justify-center mb-6">
+          {/* Face Grid */}
+          <motion.div
+            key={currentFaceIndex}
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="w-72 h-72 bg-card rounded-2xl p-4 relative"
+          >
+            <div className="grid grid-cols-3 gap-2 w-full h-full">
+              {currentFaceColors.map((color, index) => {
+                const colorData = CUBE_COLORS.find(c => c.name === color);
+                const isEmpty = color === 'empty';
+                
+                return (
+                  <motion.button
+                    key={index}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => handleCellClick(index)}
+                    className={`rounded-xl flex items-center justify-center transition-all ${
+                      isEmpty 
+                        ? 'bg-muted border-2 border-dashed border-muted-foreground/30' 
+                        : 'shadow-lg'
+                    }`}
+                    style={!isEmpty ? { backgroundColor: colorData?.hex } : {}}
+                  >
+                    {index === 4 && isEmpty && (
+                      <div className="w-3 h-3 rounded-full bg-muted-foreground/30" />
+                    )}
+                  </motion.button>
+                );
+              })}
+            </div>
+          </motion.div>
+
+          {/* Mini Cube Preview */}
+          <div className="absolute top-0 right-0 bg-card/80 backdrop-blur rounded-full p-3">
+            <div className="w-12 h-12 relative">
+              <div className="grid grid-cols-3 gap-0.5 w-full h-full">
+                {Array(9).fill(null).map((_, i) => (
+                  <div 
+                    key={i} 
+                    className={`rounded-sm ${i === 4 ? 'bg-muted-foreground/50' : 'bg-muted'}`}
+                  />
+                ))}
+              </div>
+              <span className="absolute -bottom-4 left-1/2 -translate-x-1/2 text-[10px] text-muted-foreground uppercase">
+                {faceOrder[currentFaceIndex].substring(0, 5)}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Instructions */}
+        <p className="text-center text-muted-foreground text-sm mb-6">
+          Tap a square to cycle colors or select from the palette below
+        </p>
+
+        {/* Color Palette */}
+        <div className="flex justify-center gap-3 mb-6">
+          {CUBE_COLORS.map((color) => {
+            const isSelected = selectedColor === color.name;
+            const count = colorCounts[color.name] || 0;
+            const isComplete = count === 9;
             
             return (
               <button
-                key={face}
-                onClick={() => goToFace(index)}
-                className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all ${
-                  isCurrent
-                    ? 'bg-primary text-primary-foreground scale-110'
-                    : isComplete
-                    ? 'bg-primary/20 text-primary'
-                    : 'bg-secondary text-muted-foreground'
+                key={color.name}
+                onClick={() => setSelectedColor(color.name)}
+                className={`relative w-12 h-12 rounded-full transition-all ${
+                  isSelected ? 'ring-2 ring-offset-2 ring-offset-background ring-foreground scale-110' : ''
                 }`}
+                style={{ backgroundColor: color.hex }}
               >
-                {isComplete ? <Check className="w-4 h-4" /> : index + 1}
+                {isSelected && (
+                  <Check className={`absolute inset-0 m-auto w-5 h-5 ${
+                    color.name === 'white' || color.name === 'yellow' ? 'text-background' : 'text-foreground'
+                  }`} />
+                )}
               </button>
             );
           })}
         </div>
 
-        {/* 3D Cube Preview */}
-        <motion.div
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="flex justify-center mb-6"
-        >
-          <Suspense fallback={
-            <div className="w-[200px] h-[200px] flex items-center justify-center bg-secondary/20 rounded-2xl">
-              <div className="w-12 h-12 border-4 border-primary/30 border-t-primary rounded-full animate-spin" />
-            </div>
-          }>
-            <RubiksCube3D 
-              size={200} 
-              autoRotate={false}
-              cubeState={Object.values(cubeState)}
-            />
-          </Suspense>
-        </motion.div>
-
-        {/* Current Face Label */}
-        <motion.div
-          key={currentFaceLabel}
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="text-center mb-4"
-        >
-          <span className="text-sm text-muted-foreground">Face {currentFaceIndex + 1}</span>
-          <h2 className="text-xl font-semibold">{currentFaceLabel}</h2>
-        </motion.div>
-
-        {/* Face Grid */}
-        <motion.div
-          key={currentFaceIndex}
-          initial={{ opacity: 0, x: 20 }}
-          animate={{ opacity: 1, x: 0 }}
-          exit={{ opacity: 0, x: -20 }}
-          className="flex justify-center mb-6"
-        >
-          <FaceGrid
-            faceColors={currentFaceColors}
-            selectedColor={selectedColor}
-            onCellClick={handleCellClick}
-          />
-        </motion.div>
-
-        {/* Color Picker */}
-        <div className="mb-6">
-          <ColorPicker
-            selectedColor={selectedColor}
-            onSelectColor={setSelectedColor}
-          />
-        </div>
-
         {/* Navigation Buttons */}
-        <div className="flex gap-3 max-w-md mx-auto mb-6">
+        <div className="flex gap-3 mb-4">
           <button
             onClick={prevFace}
             disabled={currentFaceIndex === 0}
-            className="btn-secondary flex-1 flex items-center justify-center gap-2 h-14 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="btn-secondary flex-1 flex items-center justify-center gap-2 h-14 disabled:opacity-50"
           >
             <ChevronLeft className="w-5 h-5" />
-            Prev
+            Back Face
           </button>
           
           <button
             onClick={nextFace}
             disabled={currentFaceIndex === 5}
-            className="btn-secondary flex-1 flex items-center justify-center gap-2 h-14 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="btn-primary flex-1 flex items-center justify-center gap-2 h-14 disabled:opacity-50"
           >
-            Next
+            Right Face
             <ChevronRight className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Solve Button */}
-        <div className="max-w-md mx-auto">
-          <button
-            onClick={handleSolve}
-            disabled={!isCubeComplete || isSolving}
-            className={`btn-primary w-full h-16 text-lg flex items-center justify-center gap-2 ${
-              !isCubeComplete || isSolving ? 'opacity-50 cursor-not-allowed' : ''
-            }`}
-          >
-            {isSolving ? (
-              <>
-                <Loader2 className="w-6 h-6 animate-spin" />
-                Solving...
-              </>
-            ) : isCubeComplete ? (
-              'Solve Cube'
-            ) : (
-              'Complete all faces to solve'
-            )}
-          </button>
-        </div>
+        {/* Switch to Camera */}
+        <button
+          onClick={() => navigate('/camera')}
+          className="w-full py-4 rounded-xl bg-secondary/50 flex items-center justify-center gap-2 text-muted-foreground mb-6"
+        >
+          <Video className="w-5 h-5" />
+          Switch to Camera Scan
+        </button>
       </main>
-
-      {/* Color Validation Warning */}
-      <ColorValidation
-        colorCounts={colorCounts}
-        visible={showValidation}
-        onDismiss={() => setShowValidation(false)}
-      />
     </div>
   );
 };
