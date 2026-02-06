@@ -189,7 +189,7 @@ const PlayCube = () => {
         </motion.button>
       </div>
 
-      <BottomNav variant="map" />
+      <BottomNav />
 
       {/* Time Selection Modal */}
       <AnimatePresence>

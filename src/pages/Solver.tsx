@@ -1,5 +1,5 @@
-import { useState, Suspense, useEffect, useRef, useCallback, useMemo } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useState, Suspense, useEffect, useRef, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Pause, 
@@ -12,28 +12,19 @@ import {
   ChevronRight,
   Copy,
   Check,
-  Share2
+  Gauge,
+  SkipBack,
+  SkipForward
 } from 'lucide-react';
-import RigidCube3D, { RigidCubeHandle, FaceName, COLOR_HEX } from '@/components/RigidCube3D';
-import AlgorithmDisplay from '@/components/AlgorithmDisplay';
-import ColorPalette from '@/components/ColorPalette';
+import RigidCube3D, { RigidCubeHandle } from '@/components/RigidCube3D';
 import BottomNav from '@/components/BottomNav';
 import StatCard from '@/components/StatCard';
 import confetti from 'canvas-confetti';
-import { CubeMove, parseSolution, getSolutionMoves, generateScramble } from '@/lib/kociembaSolver';
-import { getInverseMove } from '@/lib/rigidCubeEngine';
+import { parseSolution, getSolutionMoves, generateScramble } from '@/lib/kociembaSolver';
 import { useToast } from '@/hooks/use-toast';
-
-interface LocationState {
-  solution?: CubeMove[];
-  moveCount?: number;
-  cubeState?: Record<string, string[]>;
-}
 
 const Solver = () => {
   const navigate = useNavigate();
-  const location = useLocation();
-  const locationState = location.state as LocationState | null;
   const cubeRef = useRef<RigidCubeHandle>(null);
   const { toast } = useToast();
   
@@ -41,7 +32,6 @@ const Solver = () => {
   const [time, setTime] = useState(0);
   const [isRunning, setIsRunning] = useState(false);
   const [moveCount, setMoveCount] = useState(0);
-  const [hints, setHints] = useState(3);
   
   // Animation states
   const [isScrambling, setIsScrambling] = useState(false);
@@ -49,6 +39,8 @@ const Solver = () => {
   const [solution, setSolution] = useState<string[]>([]);
   const [solutionIndex, setSolutionIndex] = useState(0);
   const [copied, setCopied] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [speed, setSpeed] = useState<'slow' | 'normal' | 'fast'>('normal');
 
   // Timer logic
   useEffect(() => {
@@ -68,6 +60,15 @@ const Solver = () => {
     return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}:${centiseconds.toString().padStart(2, '0')}`;
   };
 
+  // Get animation duration based on speed
+  const getAnimationDuration = useCallback(() => {
+    switch (speed) {
+      case 'slow': return 800;
+      case 'fast': return 250;
+      default: return 450;
+    }
+  }, [speed]);
+
   const handleShuffle = useCallback(async () => {
     if (!cubeRef.current || isAnimating) return;
     
@@ -77,6 +78,7 @@ const Solver = () => {
     setIsRunning(false);
     setSolution([]);
     setSolutionIndex(0);
+    setIsPlaying(false);
     
     cubeRef.current.reset();
     
@@ -92,26 +94,48 @@ const Solver = () => {
     setIsRunning(true);
   }, [isAnimating]);
 
+  // Fixed Hint button - now properly gets and displays solution
   const handleHint = useCallback(async () => {
-    if (hints <= 0 || isAnimating || !cubeRef.current) return;
+    if (isAnimating || isScrambling || !cubeRef.current) return;
     
-    setHints(prev => prev - 1);
+    setIsAnimating(true);
     
-    const state = cubeRef.current.getCubeState();
-    const result = await getSolutionMoves(state);
-    
-    if (result.success && result.moves && result.moves.length > 0) {
-      const moveNotations = result.moves.map(m => m.notation);
-      setSolution(moveNotations);
-      setSolutionIndex(0);
+    try {
+      const state = cubeRef.current.getCubeState();
+      const result = await getSolutionMoves(state);
       
-      setIsAnimating(true);
-      await cubeRef.current.executeMove(moveNotations[0], 400);
-      setMoveCount(prev => prev + 1);
-      setSolutionIndex(1);
+      if (result.success && result.moves && result.moves.length > 0) {
+        const moveNotations = result.moves.map(m => m.notation);
+        setSolution(moveNotations);
+        setSolutionIndex(0);
+        setIsRunning(false);
+        
+        toast({
+          title: "Solution Found!",
+          description: `${moveNotations.length} moves to solve. Use controls to step through.`,
+        });
+      } else if (result.moves && result.moves.length === 0) {
+        toast({
+          title: "Already Solved!",
+          description: "The cube is already in solved state.",
+        });
+      } else {
+        toast({
+          variant: "destructive",
+          title: "Could not solve",
+          description: result.error || "Invalid cube state",
+        });
+      }
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to get solution. Please try again.",
+      });
+    } finally {
       setIsAnimating(false);
     }
-  }, [hints, isAnimating]);
+  }, [isAnimating, isScrambling, toast]);
 
   const handlePauseResume = () => {
     setIsRunning(prev => !prev);
@@ -124,14 +148,14 @@ const Solver = () => {
     setIsRunning(false);
     setSolution([]);
     setSolutionIndex(0);
-    setHints(3);
+    setIsPlaying(false);
   };
 
   const handleStepForward = useCallback(async () => {
     if (!cubeRef.current || isAnimating || solutionIndex >= solution.length) return;
     
     setIsAnimating(true);
-    await cubeRef.current.executeMove(solution[solutionIndex], 350);
+    await cubeRef.current.executeMove(solution[solutionIndex], getAnimationDuration());
     setMoveCount(prev => prev + 1);
     setSolutionIndex(prev => prev + 1);
     setIsAnimating(false);
@@ -139,13 +163,18 @@ const Solver = () => {
     // Check if solved
     if (solutionIndex >= solution.length - 1) {
       setIsRunning(false);
+      setIsPlaying(false);
       confetti({
         particleCount: 200,
         spread: 100,
         origin: { y: 0.6 }
       });
+      toast({
+        title: "Cube Solved!",
+        description: `Completed in ${moveCount + 1} moves!`,
+      });
     }
-  }, [solution, solutionIndex, isAnimating]);
+  }, [solution, solutionIndex, isAnimating, getAnimationDuration, moveCount, toast]);
 
   const handleStepBack = useCallback(async () => {
     if (!cubeRef.current || isAnimating || solutionIndex <= 0) return;
@@ -157,10 +186,29 @@ const Solver = () => {
     setIsAnimating(false);
   }, [solutionIndex, isAnimating]);
 
+  // Auto-play effect
+  useEffect(() => {
+    if (isPlaying && !isAnimating && solutionIndex < solution.length) {
+      const timer = setTimeout(() => handleStepForward(), 100);
+      return () => clearTimeout(timer);
+    } else if (solutionIndex >= solution.length) {
+      setIsPlaying(false);
+    }
+  }, [isPlaying, isAnimating, solutionIndex, solution.length, handleStepForward]);
+
   const handleCopy = () => {
+    if (solution.length === 0) return;
     navigator.clipboard.writeText(solution.join(' '));
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+    toast({
+      title: "Copied!",
+      description: "Solution copied to clipboard",
+    });
+  };
+
+  const cycleSpeed = () => {
+    setSpeed(s => s === 'slow' ? 'normal' : s === 'normal' ? 'fast' : 'slow');
   };
 
   return (
@@ -178,7 +226,7 @@ const Solver = () => {
         <h1 className="text-xl font-bold tracking-wider">3X3 SOLVER</h1>
         
         <button
-          onClick={() => navigate('/premium')}
+          onClick={() => navigate('/settings')}
           className="btn-icon"
           aria-label="Settings"
         >
@@ -197,7 +245,7 @@ const Solver = () => {
         <motion.div
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
-          className="flex-1 flex items-center justify-center relative min-h-[300px]"
+          className="flex-1 flex items-center justify-center relative min-h-[280px]"
         >
           {/* Circular frame */}
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
@@ -218,7 +266,7 @@ const Solver = () => {
           </Suspense>
         </motion.div>
 
-        {/* Solution display (if has solution) */}
+        {/* Solution display */}
         <AnimatePresence>
           {solution.length > 0 && (
             <motion.div
@@ -232,43 +280,73 @@ const Solver = () => {
                   <span className="text-xs text-muted-foreground uppercase">
                     Solution: {solution.length} moves
                   </span>
-                  <div className="flex gap-1">
-                    <button
-                      onClick={handleCopy}
-                      className="p-1.5 rounded-lg hover:bg-secondary transition-colors"
-                    >
-                      {copied ? <Check className="w-4 h-4 text-primary" /> : <Copy className="w-4 h-4" />}
-                    </button>
-                  </div>
+                  <button
+                    onClick={handleCopy}
+                    className="p-1.5 rounded-lg hover:bg-secondary transition-colors"
+                  >
+                    {copied ? <Check className="w-4 h-4 text-primary" /> : <Copy className="w-4 h-4" />}
+                  </button>
                 </div>
-                <p className="font-mono text-sm text-center">
-                  {solution.slice(0, 20).join(' ')}{solution.length > 20 ? '...' : ''}
-                </p>
+                <div className="flex flex-wrap gap-1 justify-center max-h-16 overflow-y-auto">
+                  {solution.map((move, i) => (
+                    <span 
+                      key={i}
+                      className={`px-2 py-0.5 rounded text-xs font-mono transition-all ${
+                        i < solutionIndex 
+                          ? 'bg-green-500/20 text-green-500' 
+                          : i === solutionIndex 
+                          ? 'bg-primary text-primary-foreground ring-2 ring-primary/50' 
+                          : 'bg-muted text-muted-foreground'
+                      }`}
+                    >
+                      {move}
+                    </span>
+                  ))}
+                </div>
               </div>
             </motion.div>
           )}
         </AnimatePresence>
 
-        {/* Solution steps navigation (if solving) */}
+        {/* Playback controls (when solution exists) */}
         {solution.length > 0 && (
-          <div className="flex items-center justify-center gap-4 mb-4">
+          <div className="flex items-center justify-center gap-3 mb-4">
+            {/* Speed selector */}
+            <button
+              onClick={cycleSpeed}
+              className="btn-icon w-10 h-10 bg-secondary text-xs font-bold"
+              title={`Speed: ${speed}`}
+            >
+              {speed === 'slow' ? '0.5x' : speed === 'fast' ? '2x' : '1x'}
+            </button>
+
             <button
               onClick={handleStepBack}
               disabled={solutionIndex <= 0 || isAnimating}
-              className="btn-icon disabled:opacity-50"
+              className="btn-icon w-10 h-10 disabled:opacity-50"
             >
-              <ChevronLeft className="w-6 h-6" />
+              <SkipBack className="w-5 h-5" />
             </button>
-            <span className="text-sm text-muted-foreground font-mono">
-              Step {solutionIndex} / {solution.length}
-            </span>
+
+            <button
+              onClick={() => setIsPlaying(!isPlaying)}
+              disabled={solutionIndex >= solution.length}
+              className="btn-primary w-14 h-14 rounded-full flex items-center justify-center disabled:opacity-50"
+            >
+              {isPlaying ? <Pause className="w-6 h-6" /> : <Play className="w-6 h-6 ml-0.5" />}
+            </button>
+
             <button
               onClick={handleStepForward}
               disabled={solutionIndex >= solution.length || isAnimating}
-              className="btn-icon disabled:opacity-50"
+              className="btn-icon w-10 h-10 disabled:opacity-50"
             >
-              <ChevronRight className="w-6 h-6" />
+              <SkipForward className="w-5 h-5" />
             </button>
+
+            <span className="text-xs text-muted-foreground font-mono min-w-[60px] text-center">
+              {solutionIndex}/{solution.length}
+            </span>
           </div>
         )}
 
@@ -285,11 +363,11 @@ const Solver = () => {
           
           <button
             onClick={handleHint}
-            disabled={hints <= 0 || isAnimating || isScrambling}
+            disabled={isAnimating || isScrambling}
             className="btn-primary flex-1 h-14 flex items-center justify-center gap-2 disabled:opacity-50"
           >
             <Lightbulb className="w-5 h-5" />
-            Hint ({hints}/3)
+            {solution.length > 0 ? 'New Hint' : 'Hint'}
           </button>
         </div>
 
@@ -303,7 +381,7 @@ const Solver = () => {
         </button>
       </main>
 
-      <BottomNav variant="solver" />
+      <BottomNav />
     </div>
   );
 };

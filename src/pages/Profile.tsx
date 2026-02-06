@@ -195,7 +195,7 @@ const Profile = () => {
         </motion.div>
       </main>
 
-      <BottomNav variant="profile" />
+      <BottomNav />
     </div>
   );
 };
