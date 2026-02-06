@@ -219,7 +219,7 @@ const Settings = () => {
         </div>
       </main>
 
-      <BottomNav variant="solver" />
+      <BottomNav />
     </div>
   );
 };

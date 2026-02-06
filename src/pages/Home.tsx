@@ -161,7 +161,7 @@ const Home = () => {
         </motion.div>
       </main>
 
-      <BottomNav variant="home" />
+      <BottomNav />
     </div>
   );
 };

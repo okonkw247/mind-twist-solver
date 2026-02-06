@@ -265,7 +265,7 @@ const Timer = () => {
         </div>
       </main>
 
-      <BottomNav variant="timer" />
+      <BottomNav />
 
       {/* Records Sheet */}
       <AnimatePresence>
