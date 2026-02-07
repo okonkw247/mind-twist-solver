@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback, Suspense } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { 
   ArrowLeft, 
   Trash2, 
@@ -11,14 +11,15 @@ import {
   SkipBack, 
   SkipForward,
   RotateCcw,
-  Gauge,
   AlertCircle,
   Pencil,
-  Puzzle
+  RefreshCw,
+  Gauge
 } from 'lucide-react';
 import BottomNav from '@/components/BottomNav';
 import RigidCube3D, { RigidCubeHandle } from '@/components/RigidCube3D';
-import { getSolutionMoves, CubeMove, parseSolution } from '@/lib/kociembaSolver';
+import { getSolutionMoves } from '@/lib/kociembaSolver';
+import { captureGridColors, CubeColor, COLOR_HEX_MAP, DetectionResult } from '@/lib/colorDetection';
 import { useToast } from '@/hooks/use-toast';
 import confetti from 'canvas-confetti';
 
@@ -26,21 +27,8 @@ const FACES = ['F', 'R', 'U', 'D', 'L', 'B'] as const;
 const FACE_NAMES = ['Front', 'Right', 'Up', 'Down', 'Left', 'Back'];
 const FACE_COLORS = ['Green', 'Red', 'White', 'Yellow', 'Orange', 'Blue'];
 
-type FaceKey = typeof FACES[number];
-
-const colorMap: Record<string, string> = {
-  white: '#f5f5f5',
-  yellow: '#ffd700',
-  red: '#dc2626',
-  orange: '#f97316',
-  blue: '#2563eb',
-  green: '#22c55e',
-};
-
-// Simulated color detection from camera
-const detectColorsFromImage = (): string[] => {
-  const colors = ['white', 'yellow', 'red', 'orange', 'blue', 'green'];
-  return Array(9).fill(null).map(() => colors[Math.floor(Math.random() * colors.length)]);
+const faceKeyMap: Record<number, string> = {
+  0: 'front', 1: 'right', 2: 'up', 3: 'down', 4: 'left', 5: 'back'
 };
 
 const CameraInput = () => {
@@ -59,11 +47,13 @@ const CameraInput = () => {
     left: Array(9).fill('empty'),
     back: Array(9).fill('empty'),
   });
+  const [detectionResults, setDetectionResults] = useState<DetectionResult[]>([]);
   
   // Camera state
   const [cameraActive, setCameraActive] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
+  const [isCapturing, setIsCapturing] = useState(false);
   
   // Solution state
   const [solution, setSolution] = useState<string[]>([]);
@@ -72,10 +62,6 @@ const CameraInput = () => {
   const [isAnimating, setIsAnimating] = useState(false);
   const [isSolving, setIsSolving] = useState(false);
   const [speed, setSpeed] = useState<'slow' | 'normal' | 'fast'>('normal');
-  
-  const faceKeyMap: Record<number, string> = {
-    0: 'front', 1: 'right', 2: 'up', 3: 'down', 4: 'left', 5: 'back'
-  };
 
   // Request camera permission
   const startCamera = useCallback(async () => {
@@ -94,6 +80,7 @@ const CameraInput = () => {
       
       if (videoRef.current) {
         videoRef.current.srcObject = mediaStream;
+        await videoRef.current.play();
       }
     } catch (error) {
       console.error('Camera error:', error);
@@ -125,31 +112,68 @@ const CameraInput = () => {
     };
   }, []);
 
-  // Capture and process face
-  const handleCapture = useCallback(() => {
-    // Simulate color detection
-    const detectedColors = detectColorsFromImage();
+  // Capture and process face with real color detection
+  const handleCapture = useCallback(async () => {
+    if (!videoRef.current || !cameraActive) return;
     
+    setIsCapturing(true);
+    
+    try {
+      // Use real color detection algorithm
+      const results = captureGridColors(videoRef.current, 0.15);
+      setDetectionResults(results);
+      
+      // Calculate average confidence
+      const avgConfidence = results.reduce((sum, r) => sum + r.confidence, 0) / 9;
+      
+      // Convert results to color names
+      const detectedColors = results.map(r => r.color);
+      
+      const faceKey = faceKeyMap[currentFace];
+      setFaceColors(prev => ({
+        ...prev,
+        [faceKey]: detectedColors
+      }));
+      
+      const newScanned = [...scannedFaces];
+      newScanned[currentFace] = true;
+      setScannedFaces(newScanned);
+      
+      toast({
+        title: `${FACE_NAMES[currentFace]} Face Captured`,
+        description: avgConfidence > 0.7 
+          ? "Colors detected with high confidence!" 
+          : "Colors detected. Review and adjust if needed.",
+      });
+      
+      // Auto-advance to next face
+      if (currentFace < 5) {
+        setTimeout(() => setCurrentFace(currentFace + 1), 600);
+      }
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Detection Failed",
+        description: "Could not detect colors. Please try again.",
+      });
+    } finally {
+      setIsCapturing(false);
+    }
+  }, [currentFace, scannedFaces, cameraActive, toast]);
+
+  // Manual color correction
+  const handleColorCorrect = (index: number) => {
+    const colors: CubeColor[] = ['white', 'yellow', 'red', 'orange', 'green', 'blue'];
     const faceKey = faceKeyMap[currentFace];
+    const currentColor = faceColors[faceKey][index];
+    const currentIdx = colors.indexOf(currentColor as CubeColor);
+    const nextColor = colors[(currentIdx + 1) % colors.length];
+    
     setFaceColors(prev => ({
       ...prev,
-      [faceKey]: detectedColors
+      [faceKey]: prev[faceKey].map((c, i) => i === index ? nextColor : c)
     }));
-    
-    const newScanned = [...scannedFaces];
-    newScanned[currentFace] = true;
-    setScannedFaces(newScanned);
-    
-    toast({
-      title: `${FACE_NAMES[currentFace]} Face Captured`,
-      description: "Colors detected successfully!",
-    });
-    
-    // Auto-advance to next face
-    if (currentFace < 5) {
-      setTimeout(() => setCurrentFace(currentFace + 1), 500);
-    }
-  }, [currentFace, scannedFaces, toast]);
+  };
 
   // Auto-solve when all faces captured
   const handleSolve = useCallback(async () => {
@@ -162,6 +186,7 @@ const CameraInput = () => {
         const moveNotations = result.moves.map(m => m.notation);
         setSolution(moveNotations);
         setSolutionIndex(0);
+        stopCamera();
         
         toast({
           title: "Solution Found!",
@@ -183,7 +208,7 @@ const CameraInput = () => {
     } finally {
       setIsSolving(false);
     }
-  }, [faceColors, toast]);
+  }, [faceColors, stopCamera, toast]);
 
   // Auto-solve when all 6 faces are captured
   useEffect(() => {
@@ -250,7 +275,9 @@ const CameraInput = () => {
     setSolution([]);
     setSolutionIndex(0);
     setIsPlaying(false);
+    setDetectionResults([]);
     cubeRef.current?.reset();
+    startCamera();
   };
 
   const completedFaces = scannedFaces.filter(Boolean).length;
@@ -286,7 +313,8 @@ const CameraInput = () => {
             {FACES.map((face, index) => (
               <button
                 key={face}
-                onClick={() => setCurrentFace(index)}
+                onClick={() => !hasSolution && setCurrentFace(index)}
+                disabled={hasSolution}
                 className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold transition-all ${
                   index === currentFace
                     ? 'bg-primary text-primary-foreground'
@@ -298,6 +326,21 @@ const CameraInput = () => {
                 {scannedFaces[index] ? <CheckCircle2 className="w-4 h-4" /> : face}
               </button>
             ))}
+          </div>
+        </div>
+
+        {/* Progress indicator */}
+        <div className="mb-4">
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-sm font-medium">Scanning Progress</span>
+            <span className="text-sm text-muted-foreground">{completedFaces}/6 faces</span>
+          </div>
+          <div className="h-2 bg-secondary rounded-full overflow-hidden">
+            <motion.div
+              className="h-full bg-primary"
+              animate={{ width: `${(completedFaces / 6) * 100}%` }}
+              transition={{ duration: 0.3 }}
+            />
           </div>
         </div>
 
@@ -332,20 +375,31 @@ const CameraInput = () => {
                   </div>
                 )}
                 
-                {/* Scan overlay grid */}
+                {/* Scan overlay grid with detected colors */}
                 {cameraActive && (
                   <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                     <div className="w-64 h-64 border-2 border-primary rounded-xl p-2">
-                      <div className="grid grid-cols-3 gap-1 w-full h-full">
-                        {Array(9).fill(null).map((_, i) => (
-                          <div 
-                            key={i} 
-                            className="border border-primary/50 rounded-lg"
-                            style={scannedFaces[currentFace] && faceColors[faceKeyMap[currentFace]][i] !== 'empty' ? {
-                              backgroundColor: colorMap[faceColors[faceKeyMap[currentFace]][i]] || 'transparent'
-                            } : {}}
-                          />
-                        ))}
+                      <div className="grid grid-cols-3 gap-1 w-full h-full pointer-events-auto">
+                        {Array(9).fill(null).map((_, i) => {
+                          const faceKey = faceKeyMap[currentFace];
+                          const color = faceColors[faceKey][i];
+                          const isEmpty = color === 'empty';
+                          
+                          return (
+                            <button
+                              key={i}
+                              onClick={() => !isEmpty && handleColorCorrect(i)}
+                              className={`border-2 rounded-lg transition-all ${
+                                isEmpty 
+                                  ? 'border-primary/50' 
+                                  : 'border-black/30 shadow-md'
+                              }`}
+                              style={!isEmpty ? {
+                                backgroundColor: COLOR_HEX_MAP[color as CubeColor] || 'transparent'
+                              } : {}}
+                            />
+                          );
+                        })}
                       </div>
                     </div>
                     
@@ -366,11 +420,16 @@ const CameraInput = () => {
                   Step {currentFace + 1}/6: {FACE_NAMES[currentFace]} Face
                 </div>
                 <p className="text-muted-foreground text-sm">
-                  Center the {FACE_COLORS[currentFace]} center sticker in the grid
+                  Center the {FACE_COLORS[currentFace]} face in the grid
                 </p>
+                {scannedFaces[currentFace] && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Tap colors to correct if needed
+                  </p>
+                )}
               </div>
 
-              {/* Capture Button */}
+              {/* Action Buttons */}
               <div className="flex items-center justify-center gap-4 mb-6">
                 <button
                   onClick={() => navigate('/manual-input')}
@@ -383,14 +442,41 @@ const CameraInput = () => {
                 <motion.button
                   whileTap={{ scale: 0.95 }}
                   onClick={handleCapture}
-                  disabled={!cameraActive}
+                  disabled={!cameraActive || isCapturing}
                   className="w-20 h-20 rounded-full bg-primary flex items-center justify-center shadow-lg disabled:opacity-50"
                   style={{ boxShadow: '0 0 30px hsl(var(--primary) / 0.5)' }}
                 >
-                  <Camera className="w-8 h-8" />
+                  {isCapturing ? (
+                    <RefreshCw className="w-8 h-8 animate-spin" />
+                  ) : (
+                    <Camera className="w-8 h-8" />
+                  )}
                 </motion.button>
                 
-                <div className="w-14 h-14" /> {/* Spacer for symmetry */}
+                {scannedFaces[currentFace] && currentFace < 5 ? (
+                  <button
+                    onClick={() => setCurrentFace(currentFace + 1)}
+                    className="btn-icon w-14 h-14 bg-primary"
+                    aria-label="Next face"
+                  >
+                    <span className="text-sm font-bold">Next</span>
+                  </button>
+                ) : completedFaces === 6 ? (
+                  <button
+                    onClick={handleSolve}
+                    disabled={isSolving}
+                    className="btn-icon w-14 h-14 bg-primary"
+                    aria-label="Solve"
+                  >
+                    {isSolving ? (
+                      <RefreshCw className="w-6 h-6 animate-spin" />
+                    ) : (
+                      <CheckCircle2 className="w-6 h-6" />
+                    )}
+                  </button>
+                ) : (
+                  <div className="w-14 h-14" /> // Spacer
+                )}
               </div>
             </>
           ) : (
@@ -414,8 +500,8 @@ const CameraInput = () => {
                     Step {solutionIndex} / {solution.length}
                   </span>
                 </div>
-                <div className="flex flex-wrap gap-1 justify-center">
-                  {solution.slice(0, 15).map((move, i) => (
+                <div className="flex flex-wrap gap-1 justify-center max-h-16 overflow-y-auto">
+                  {solution.map((move, i) => (
                     <span 
                       key={i}
                       className={`px-2 py-0.5 rounded text-xs font-mono ${
@@ -429,7 +515,6 @@ const CameraInput = () => {
                       {move}
                     </span>
                   ))}
-                  {solution.length > 15 && <span className="text-muted-foreground">...</span>}
                 </div>
               </div>
 
@@ -438,9 +523,9 @@ const CameraInput = () => {
                 {/* Speed selector */}
                 <button
                   onClick={() => setSpeed(s => s === 'slow' ? 'normal' : s === 'normal' ? 'fast' : 'slow')}
-                  className="btn-icon w-12 h-12 bg-secondary"
+                  className="btn-icon w-12 h-12 bg-secondary text-xs font-bold"
                 >
-                  <Gauge className="w-5 h-5" />
+                  {speed === 'slow' ? '0.5x' : speed === 'fast' ? '2x' : '1x'}
                 </button>
 
                 <button
@@ -484,27 +569,6 @@ const CameraInput = () => {
             </>
           )}
         </div>
-
-        {/* Solve button (before all faces captured) */}
-        {!hasSolution && (
-          <button
-            onClick={handleSolve}
-            disabled={completedFaces < 6 || isSolving}
-            className="btn-primary w-full h-14 flex items-center justify-center gap-2 disabled:opacity-50 mb-4"
-          >
-            {isSolving ? (
-              <>
-                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                Solving...
-              </>
-            ) : (
-              <>
-                <Puzzle className="w-5 h-5" />
-                Solve Cube ({completedFaces}/6)
-              </>
-            )}
-          </button>
-        )}
       </main>
 
       <BottomNav />
