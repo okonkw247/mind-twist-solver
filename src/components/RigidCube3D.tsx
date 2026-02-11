@@ -14,11 +14,10 @@
  * 3. Increased default animation duration for smoother appearance
  */
 
-import { useRef, useState, useCallback, forwardRef, useImperativeHandle, useMemo, useEffect } from 'react';
-import { Canvas, useFrame, useThree } from '@react-three/fiber';
+import { useRef, useState, useCallback, forwardRef, useImperativeHandle, useMemo } from 'react';
+import { Canvas, useFrame } from '@react-three/fiber';
 import { OrbitControls, RoundedBox } from '@react-three/drei';
 import * as THREE from 'three';
-import { useMobileOptimization } from '@/hooks/useMobileOptimization';
 import {
   RigidCubie,
   ColorName,
@@ -266,24 +265,20 @@ const CubeScene = ({
         )}
       </group>
       
-      {/* Camera controls - optimized for both mobile and desktop */}
+      {/* Camera controls - always interactive */}
       <OrbitControls
         ref={controlsRef}
         enableZoom={true}
-        enablePan={false}
+        enablePan={true}
         minDistance={4}
         maxDistance={15}
         minPolarAngle={Math.PI / 6}
         maxPolarAngle={Math.PI * 5 / 6}
-        dampingFactor={0.08}
-        rotateSpeed={0.7}
-        zoomSpeed={0.6}
+        dampingFactor={0.1}
+        rotateSpeed={0.8}
+        zoomSpeed={0.8}
+        panSpeed={0.5}
         enableDamping={true}
-        // Touch controls for mobile
-        touches={{
-          ONE: THREE.TOUCH.ROTATE,
-          TWO: THREE.TOUCH.DOLLY_PAN
-        }}
       />
     </>
   );
@@ -537,24 +532,15 @@ const RigidCube3D = forwardRef<RigidCubeHandle, RigidCube3DProps>(
       getMoveHistory: () => [...moveHistoryRef.current],
     }));
     
-    // Use mobile optimization settings
-    const { isMobile, settings } = useMobileOptimization();
-    
     return (
       <div 
         style={{ width: size, height: size }} 
-        className="cursor-grab active:cursor-grabbing select-none"
+        className="cursor-grab active:cursor-grabbing touch-none select-none"
       >
         <Canvas 
           camera={{ position: [5, 4, 5], fov: 40 }}
-          gl={{ 
-            antialias: settings.antialias,
-            powerPreference: settings.powerPreference,
-            alpha: false,
-          }}
-          dpr={settings.pixelRatio}
-          frameloop="demand"
-          performance={{ min: 0.5 }}
+          gl={{ antialias: true, powerPreference: 'high-performance' }}
+          dpr={[1, 2]}
         >
           <CubeScene
             cubies={cubies}

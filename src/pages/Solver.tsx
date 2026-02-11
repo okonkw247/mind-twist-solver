@@ -20,8 +20,7 @@ import RigidCube3D, { RigidCubeHandle } from '@/components/RigidCube3D';
 import BottomNav from '@/components/BottomNav';
 import StatCard from '@/components/StatCard';
 import confetti from 'canvas-confetti';
-import { parseSolution, getSolutionMoves } from '@/lib/kociembaSolver';
-import { generateProperScramble } from '@/lib/shuffleAlgorithm';
+import { parseSolution, getSolutionMoves, generateScramble } from '@/lib/kociembaSolver';
 import { useToast } from '@/hooks/use-toast';
 
 const Solver = () => {
@@ -81,32 +80,19 @@ const Solver = () => {
     setSolutionIndex(0);
     setIsPlaying(false);
     
-    // Reset cube to solved state first
     cubeRef.current.reset();
     
-    // Generate proper scramble using LEGAL MOVES ONLY
-    // This ensures cube is always solvable (no random color assignment!)
-    const scrambleMoves = generateProperScramble(20);
+    const scramble = generateScramble(15);
+    const moves = parseSolution(scramble);
     
-    toast({
-      title: "Shuffling...",
-      description: `Applying ${scrambleMoves.length} moves`,
-    });
-    
-    // Apply each move sequentially with animation
-    for (const move of scrambleMoves) {
-      await cubeRef.current.executeMove(move, 120);
-      await new Promise(r => setTimeout(r, 30));
+    for (const move of moves) {
+      await cubeRef.current.executeMove(move.notation, 150);
+      await new Promise(r => setTimeout(r, 20));
     }
     
     setIsScrambling(false);
     setIsRunning(true);
-    
-    toast({
-      title: "Scramble Complete!",
-      description: "Cube is ready to solve",
-    });
-  }, [isAnimating, toast]);
+  }, [isAnimating]);
 
   // Fixed Hint button - now properly gets and displays solution
   const handleHint = useCallback(async () => {
