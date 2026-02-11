@@ -1,25 +1,13 @@
 import { useState, Suspense, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { 
-  ArrowLeft, 
-  Share2, 
-  Copy, 
-  RotateCcw, 
-  Check, 
-  Sparkles,
-  Play,
-  Pause,
-  SkipBack,
-  SkipForward
-} from 'lucide-react';
-import RigidCube3D, { RigidCubeHandle } from '@/components/RigidCube3D';
-import BottomNav from '@/components/BottomNav';
+import { ArrowLeft, Share2, Copy, RotateCcw, Check, Sparkles, GraduationCap, Zap } from 'lucide-react';
+import AnimatedRubiksCube, { AnimatedCubeHandle } from '@/components/AnimatedRubiksCube';
+import SolveControls from '@/components/SolveControls';
 import confetti from 'canvas-confetti';
 import { CubeMove, parseSolution, invertSolution } from '@/lib/kociembaSolver';
-import { useToast } from '@/hooks/use-toast';
 
-// Default solution for demo
+// Default solution for demo - use parseSolution to create proper CubeMove objects
 const defaultMoves: CubeMove[] = parseSolution("R U R' U' R' F R2 U' R' F'");
 
 interface LocationState {
@@ -28,18 +16,37 @@ interface LocationState {
   cubeState?: Record<string, string[]>;
 }
 
+const faceHighlightColors: Record<string, string> = {
+  R: 'shadow-[0_0_30px_rgba(220,38,38,0.6)]',
+  L: 'shadow-[0_0_30px_rgba(249,115,22,0.6)]',
+  U: 'shadow-[0_0_30px_rgba(255,255,255,0.6)]',
+  D: 'shadow-[0_0_30px_rgba(255,215,0,0.6)]',
+  F: 'shadow-[0_0_30px_rgba(34,197,94,0.6)]',
+  B: 'shadow-[0_0_30px_rgba(37,99,235,0.6)]',
+};
+
+// Get inverse of a single move
+function getInverseMove(move: CubeMove): CubeMove {
+  const inversed = invertSolution([move]);
+  return inversed[0];
+}
+
 const Solution = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const locationState = location.state as LocationState | null;
-  const cubeRef = useRef<RigidCubeHandle>(null);
-  const { toast } = useToast();
+  const cubeRef = useRef<AnimatedCubeHandle>(null);
   
   const [currentStep, setCurrentStep] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [speed, setSpeed] = useState<'slow' | 'normal' | 'fast'>('normal');
   const [copied, setCopied] = useState(false);
+  const [learningMode, setLearningMode] = useState(true);
+  const [soundEnabled, setSoundEnabled] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
+  
+  // Track executed moves for proper step back
+  const executedMovesRef = useRef<CubeMove[]>([]);
 
   // Use solution from navigation state or default
   const moves = locationState?.solution || defaultMoves;
@@ -48,9 +55,9 @@ const Solution = () => {
   // Get animation duration based on speed
   const getAnimationDuration = useCallback(() => {
     switch (speed) {
-      case 'slow': return 800;
-      case 'fast': return 250;
-      default: return 450;
+      case 'slow': return 1200;
+      case 'fast': return 300;
+      default: return 600;
     }
   }, [speed]);
 
@@ -63,50 +70,73 @@ const Solution = () => {
     });
   }, []);
 
-  // Step forward
-  const handleStepForward = useCallback(async () => {
-    if (!cubeRef.current || isAnimating || currentStep >= totalMoves) return;
+  // Execute a single move with animation
+  const executeMove = useCallback(async (move: CubeMove) => {
+    if (!cubeRef.current) return;
     
     setIsAnimating(true);
-    await cubeRef.current.executeMove(moves[currentStep].notation, getAnimationDuration());
-    setCurrentStep(prev => prev + 1);
+    await cubeRef.current.executeMove(move, getAnimationDuration());
+    executedMovesRef.current.push(move);
     setIsAnimating(false);
-    
-    if (currentStep >= totalMoves - 1) {
-      setIsPlaying(false);
-      confetti({ particleCount: 200, spread: 100, origin: { y: 0.6 } });
-    }
-  }, [currentStep, totalMoves, moves, isAnimating, getAnimationDuration]);
+  }, [getAnimationDuration]);
 
-  // Step back
-  const handleStepBack = useCallback(async () => {
-    if (!cubeRef.current || isAnimating || currentStep <= 0) return;
+  // Execute inverse move for step back
+  const executeInverseMove = useCallback(async (move: CubeMove) => {
+    if (!cubeRef.current) return;
     
+    const inverse = getInverseMove(move);
     setIsAnimating(true);
-    await cubeRef.current.undoMove();
-    setCurrentStep(prev => prev - 1);
+    await cubeRef.current.executeMove(inverse, getAnimationDuration());
     setIsAnimating(false);
-  }, [currentStep, isAnimating]);
+  }, [getAnimationDuration]);
 
-  // Auto-play
+  // Auto-play logic
   useEffect(() => {
-    if (isPlaying && !isAnimating && currentStep < totalMoves) {
-      const timer = setTimeout(() => handleStepForward(), 100);
-      return () => clearTimeout(timer);
-    } else if (currentStep >= totalMoves) {
-      setIsPlaying(false);
+    if (isPlaying && currentStep < totalMoves && !isAnimating) {
+      const runNextMove = async () => {
+        const move = moves[currentStep];
+        await executeMove(move);
+        
+        if (currentStep >= totalMoves - 1) {
+          setIsPlaying(false);
+          // Celebration confetti on completion
+          confetti({
+            particleCount: 200,
+            spread: 100,
+            origin: { y: 0.6 }
+          });
+        }
+        setCurrentStep(prev => prev + 1);
+      };
+      
+      runNextMove();
     }
-  }, [isPlaying, isAnimating, currentStep, totalMoves, handleStepForward]);
+  }, [isPlaying, currentStep, isAnimating, totalMoves, moves, executeMove]);
+
+  const handleStepForward = async () => {
+    if (currentStep < totalMoves && !isAnimating) {
+      const move = moves[currentStep];
+      await executeMove(move);
+      setCurrentStep(prev => prev + 1);
+    }
+  };
+
+  const handleStepBack = async () => {
+    if (currentStep > 0 && !isAnimating) {
+      // Get the last executed move and invert it
+      const lastMove = executedMovesRef.current.pop();
+      if (lastMove) {
+        await executeInverseMove(lastMove);
+        setCurrentStep(prev => prev - 1);
+      }
+    }
+  };
 
   const handleCopyMoves = () => {
     const moveString = moves.map(m => m.notation).join(' ');
     navigator.clipboard.writeText(moveString);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
-    toast({
-      title: "Copied!",
-      description: "Solution copied to clipboard",
-    });
   };
 
   const handleShare = async () => {
@@ -115,7 +145,7 @@ const Solution = () => {
     if (navigator.share) {
       try {
         await navigator.share({
-          title: 'My Cube Solution - JSN Solver',
+          title: 'My Cube Solution - JSN Solving',
           text: `I solved my Rubik's Cube in ${totalMoves} moves!\n\nSolution: ${moveString}`,
           url: window.location.origin,
         });
@@ -130,27 +160,53 @@ const Solution = () => {
   const handleRestart = () => {
     setCurrentStep(0);
     setIsPlaying(false);
+    executedMovesRef.current = [];
     cubeRef.current?.reset();
   };
 
   const currentMove = currentStep > 0 ? moves[currentStep - 1] : null;
   const nextMove = currentStep < totalMoves ? moves[currentStep] : null;
+  const highlightClass = nextMove ? faceHighlightColors[nextMove.face] || '' : '';
 
   return (
-    <div className="min-h-screen bg-background pb-20">
+    <div className="min-h-screen bg-background">
       {/* Header */}
-      <header className="flex items-center gap-3 px-4 py-4 safe-top">
-        <button
-          onClick={() => navigate('/home')}
-          className="btn-icon"
-          aria-label="Go back"
-        >
-          <ArrowLeft className="w-6 h-6" />
-        </button>
-        <h1 className="text-xl font-bold tracking-wider flex-1">Solution</h1>
+      <header className="fixed top-0 left-0 right-0 z-50 gradient-main">
+        <div className="flex items-center gap-3 px-4 py-3">
+          <button
+            onClick={() => navigate('/home')}
+            className="p-2 rounded-lg hover:bg-white/10 transition-colors"
+            aria-label="Go back"
+          >
+            <ArrowLeft className="w-5 h-5 text-white" />
+          </button>
+          <h1 className="text-lg font-semibold text-white flex-1">Solution</h1>
+          
+          {/* Mode Toggle */}
+          <button
+            onClick={() => setLearningMode(!learningMode)}
+            className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
+              learningMode 
+                ? 'bg-green-500/20 text-green-400 border border-green-500/30' 
+                : 'bg-orange-500/20 text-orange-400 border border-orange-500/30'
+            }`}
+          >
+            {learningMode ? (
+              <>
+                <GraduationCap className="w-4 h-4" />
+                Learn
+              </>
+            ) : (
+              <>
+                <Zap className="w-4 h-4" />
+                Pro
+              </>
+            )}
+          </button>
+        </div>
       </header>
 
-      <main className="px-4">
+      <main className="pt-16 pb-8 px-4">
         {/* Success Banner */}
         <motion.div
           initial={{ opacity: 0, y: -20 }}
@@ -159,46 +215,53 @@ const Solution = () => {
         >
           <div className="flex items-center justify-center gap-2 mb-1">
             <Check className="w-5 h-5 text-green-500" />
-            <span className="font-bold text-green-500">Solution Found!</span>
+            <span className="font-bold text-green-500">Solved!</span>
             <Sparkles className="w-5 h-5 text-yellow-400" />
           </div>
           <p className="text-sm text-muted-foreground">
-            <span className="font-semibold text-foreground">{totalMoves} moves</span> to solve
+            Your cube can be solved in <span className="font-semibold text-foreground">{totalMoves} moves</span>
           </p>
         </motion.div>
 
-        {/* Moves Display */}
+        {/* All Moves Display */}
         <div className="mb-4 p-3 rounded-xl bg-secondary/50 border border-border">
-          <div className="flex flex-wrap gap-1.5 justify-center max-h-20 overflow-y-auto">
+          <div className="flex flex-wrap gap-1.5 justify-center">
             {moves.map((move, index) => (
-              <span
+              <button
                 key={index}
+                onClick={() => setCurrentStep(index + 1)}
                 className={`px-2 py-1 rounded font-mono text-sm transition-all ${
-                  index < currentStep
+                  index === currentStep
+                    ? 'bg-primary text-primary-foreground scale-110 ring-2 ring-primary/50'
+                    : index < currentStep
                     ? 'bg-green-500/20 text-green-500'
-                    : index === currentStep
-                    ? 'bg-primary text-primary-foreground ring-2 ring-primary/50'
-                    : 'bg-muted text-muted-foreground'
+                    : 'bg-muted text-muted-foreground hover:bg-muted/80'
                 }`}
               >
                 {move.notation}
-              </span>
+              </button>
             ))}
           </div>
         </div>
 
-        {/* 3D Cube */}
+        {/* 3D Animated Cube with Highlight */}
         <motion.div
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
-          className="flex justify-center mb-4"
+          className={`flex justify-center mb-4 rounded-3xl transition-shadow duration-300 ${highlightClass}`}
         >
           <Suspense fallback={
-            <div className="w-64 h-64 flex items-center justify-center bg-secondary/20 rounded-2xl">
+            <div className="w-[260px] h-[260px] flex items-center justify-center bg-secondary/20 rounded-2xl">
               <div className="w-12 h-12 border-4 border-primary/30 border-t-primary rounded-full animate-spin" />
             </div>
           }>
-            <RigidCube3D ref={cubeRef} size={260} />
+            <AnimatedRubiksCube 
+              ref={cubeRef}
+              size={260} 
+              onMoveComplete={(move) => {
+                console.log('Move completed:', move.notation);
+              }}
+            />
           </Suspense>
         </motion.div>
 
@@ -211,20 +274,22 @@ const Solution = () => {
         >
           {currentStep === 0 ? (
             <p className="text-muted-foreground">Press play to start solving</p>
-          ) : currentStep >= totalMoves ? (
+          ) : currentStep > totalMoves ? (
             <div className="flex items-center justify-center gap-2">
               <Check className="w-5 h-5 text-green-500" />
               <p className="font-bold text-green-500">Cube Solved!</p>
             </div>
           ) : (
             <>
-              <div className="text-4xl font-mono font-bold mb-2 text-primary">
+              <div className="text-4xl font-mono font-bold mb-2 gradient-text">
                 {currentMove?.notation}
               </div>
-              <p className="text-sm text-muted-foreground">
-                {currentMove?.description}
-              </p>
-              {nextMove && (
+              {learningMode && (
+                <p className="text-sm text-muted-foreground">
+                  {currentMove?.description}
+                </p>
+              )}
+              {nextMove && learningMode && (
                 <p className="text-xs text-muted-foreground mt-2">
                   Next: <span className="font-mono">{nextMove.notation}</span>
                 </p>
@@ -234,50 +299,23 @@ const Solution = () => {
         </motion.div>
 
         {/* Playback Controls */}
-        <div className="flex items-center justify-center gap-3 mb-6">
-          <button
-            onClick={() => setSpeed(s => s === 'slow' ? 'normal' : s === 'normal' ? 'fast' : 'slow')}
-            className="btn-icon w-10 h-10 bg-secondary text-xs font-bold"
-          >
-            {speed === 'slow' ? '0.5x' : speed === 'fast' ? '2x' : '1x'}
-          </button>
-
-          <button
-            onClick={handleStepBack}
-            disabled={currentStep <= 0 || isAnimating}
-            className="btn-icon w-10 h-10 disabled:opacity-50"
-          >
-            <SkipBack className="w-5 h-5" />
-          </button>
-
-          <button
-            onClick={() => setIsPlaying(!isPlaying)}
-            disabled={currentStep >= totalMoves}
-            className="btn-primary w-14 h-14 rounded-full flex items-center justify-center disabled:opacity-50"
-          >
-            {isPlaying ? <Pause className="w-6 h-6" /> : <Play className="w-6 h-6 ml-0.5" />}
-          </button>
-
-          <button
-            onClick={handleStepForward}
-            disabled={currentStep >= totalMoves || isAnimating}
-            className="btn-icon w-10 h-10 disabled:opacity-50"
-          >
-            <SkipForward className="w-5 h-5" />
-          </button>
-
-          <button
-            onClick={handleRestart}
-            className="btn-icon w-10 h-10 bg-secondary"
-          >
-            <RotateCcw className="w-5 h-5" />
-          </button>
+        <div className="mb-6">
+          <SolveControls
+            isPlaying={isPlaying}
+            onPlay={() => setIsPlaying(true)}
+            onPause={() => setIsPlaying(false)}
+            onStepForward={handleStepForward}
+            onStepBack={handleStepBack}
+            onRestart={handleRestart}
+            currentStep={currentStep}
+            totalSteps={totalMoves}
+            speed={speed}
+            onSpeedChange={setSpeed}
+            soundEnabled={soundEnabled}
+            onSoundToggle={() => setSoundEnabled(!soundEnabled)}
+            learningMode={learningMode}
+          />
         </div>
-
-        {/* Step counter */}
-        <p className="text-center text-sm text-muted-foreground mb-6">
-          Step {currentStep} / {totalMoves}
-        </p>
 
         {/* Action Buttons */}
         <div className="space-y-3 max-w-md mx-auto">
@@ -308,8 +346,6 @@ const Solution = () => {
           </div>
         </div>
       </main>
-
-      <BottomNav />
     </div>
   );
 };

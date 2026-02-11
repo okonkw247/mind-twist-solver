@@ -164,7 +164,7 @@ const Collection = () => {
         </div>
       </main>
 
-      <BottomNav />
+      <BottomNav variant="collection" />
     </div>
   );
 };
