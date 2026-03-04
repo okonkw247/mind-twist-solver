@@ -5,6 +5,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AnimatePresence } from 'framer-motion';
+import { CubeProvider } from '@/cube/CubeProvider';
 import SplashScreen from "./pages/SplashScreen";
 import WelcomeScreen from "./pages/WelcomeScreen";
 import Home from "./pages/Home";
@@ -88,7 +89,9 @@ const App = () => (
       <Toaster />
       <Sonner />
       <BrowserRouter>
-        <AppContent />
+        <CubeProvider>
+          <AppContent />
+        </CubeProvider>
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>
