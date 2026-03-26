@@ -1,62 +1,41 @@
-import { Suspense, useState, useRef, useEffect } from 'react';
+import { Suspense, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Settings, Trophy, Play, Puzzle, Star } from 'lucide-react';
-import RigidCube3D, { RigidCubeHandle } from '@/components/RigidCube3D';
+import CubeRenderer3D from '@/components/CubeRenderer3D';
+import { useCubeContext } from '@/cube/CubeProvider';
 import BottomNav from '@/components/BottomNav';
 import StatCard from '@/components/StatCard';
 import { generateScramble, parseSolution } from '@/lib/kociembaSolver';
 
 const Home = () => {
   const navigate = useNavigate();
-  const cubeRef = useRef<RigidCubeHandle>(null);
+  const cube = useCubeContext();
   const [bestTime] = useState('00:42.15');
   const [solveCount] = useState(1284);
   const [currentLevel] = useState(12);
   const [rank] = useState('GRANDMASTER');
-  const [isScrambling, setIsScrambling] = useState(false);
 
   // Auto-scramble on mount for visual effect
   useEffect(() => {
-    const doScramble = async () => {
-      if (!cubeRef.current || isScrambling) return;
-      setIsScrambling(true);
-      
-      await new Promise(r => setTimeout(r, 500)); // Wait for render
-      
-      const scramble = generateScramble(8);
-      const moves = parseSolution(scramble);
-      
-      for (const move of moves) {
-        await cubeRef.current.executeMove(move.notation, 200);
-        await new Promise(r => setTimeout(r, 50));
-      }
-      
-      setIsScrambling(false);
-    };
-    
-    doScramble();
+    if (cube.isAnimating) return;
+    cube.setSpeed('fast');
+    const scramble = generateScramble(8);
+    const moves = parseSolution(scramble);
+    cube.enqueue(moves.map(m => m.notation));
+    // Reset speed after a delay
+    const timer = setTimeout(() => cube.setSpeed('normal'), 3000);
+    return () => clearTimeout(timer);
   }, []);
 
   return (
     <div className="min-h-screen bg-background pb-24">
-      {/* Header */}
       <header className="flex items-center justify-between px-4 py-4 safe-top">
-        <button
-          onClick={() => navigate('/premium')}
-          className="btn-icon"
-          aria-label="Settings"
-        >
+        <button onClick={() => navigate('/premium')} className="btn-icon" aria-label="Settings">
           <Settings className="w-6 h-6" />
         </button>
-        
         <h1 className="text-xl font-bold tracking-wider">JSN SOLVER</h1>
-        
-        <button
-          onClick={() => navigate('/timer')}
-          className="btn-icon"
-          aria-label="Achievements"
-        >
+        <button onClick={() => navigate('/timer')} className="btn-icon" aria-label="Achievements">
           <Trophy className="w-6 h-6" />
         </button>
       </header>
@@ -71,18 +50,11 @@ const Home = () => {
           <div className="flex-1">
             <div className="flex items-center gap-2 mb-1">
               <div className="w-2 h-2 rounded-full bg-destructive animate-pulse" />
-              <span className="text-xs font-semibold text-destructive uppercase tracking-wider">
-                Daily Challenge
-              </span>
+              <span className="text-xs font-semibold text-destructive uppercase tracking-wider">Daily Challenge</span>
             </div>
             <h3 className="text-lg font-bold mb-1">Mirror Scramble</h3>
             <p className="text-sm text-muted-foreground mb-3">Beat 00:30 to win 500 Gold</p>
-            <button
-              onClick={() => navigate('/play-cube')}
-              className="btn-primary py-2 px-6 text-sm"
-            >
-              Join Now
-            </button>
+            <button onClick={() => navigate('/play-cube')} className="btn-primary py-2 px-6 text-sm">Join Now</button>
           </div>
           <div className="w-20 h-20 rounded-full bg-secondary/50 flex items-center justify-center">
             <Puzzle className="w-10 h-10 text-muted-foreground" />
@@ -96,18 +68,16 @@ const Home = () => {
           transition={{ delay: 0.1 }}
           className="relative rounded-3xl bg-gradient-to-br from-card to-secondary/50 p-6 mb-6 overflow-hidden"
         >
-          {/* Ambient glow */}
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
             <div className="w-64 h-64 rounded-full bg-primary/10 blur-3xl" />
           </div>
-          
           <div className="relative flex justify-center py-4">
             <Suspense fallback={
               <div className="w-48 h-48 flex items-center justify-center">
                 <div className="w-12 h-12 border-4 border-primary/30 border-t-primary rounded-full animate-spin" />
               </div>
             }>
-              <RigidCube3D ref={cubeRef} size={220} />
+              <CubeRenderer3D size={220} />
             </Suspense>
           </div>
         </motion.div>
@@ -143,18 +113,11 @@ const Home = () => {
           transition={{ delay: 0.4 }}
           className="space-y-3"
         >
-          <button
-            onClick={() => navigate('/play-cube')}
-            className="btn-primary w-full h-14 flex items-center justify-center gap-3 text-lg"
-          >
+          <button onClick={() => navigate('/play-cube')} className="btn-primary w-full h-14 flex items-center justify-center gap-3 text-lg">
             <Play className="w-6 h-6" />
             PLAY GAME - LEVEL {currentLevel}
           </button>
-          
-          <button
-            onClick={() => navigate('/solver')}
-            className="btn-secondary w-full h-14 flex items-center justify-center gap-3 text-lg"
-          >
+          <button onClick={() => navigate('/solver')} className="btn-secondary w-full h-14 flex items-center justify-center gap-3 text-lg">
             <Puzzle className="w-5 h-5" />
             FREE PLAY
           </button>
