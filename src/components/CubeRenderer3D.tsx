@@ -7,7 +7,7 @@
  * - Memo'd cubies to minimize re-renders
  */
 
-import { useRef, useMemo, memo } from 'react';
+import { useRef, useMemo, memo, forwardRef } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { OrbitControls, RoundedBox } from '@react-three/drei';
 import * as THREE from 'three';
@@ -167,23 +167,32 @@ const CubeSceneInner = ({ cubies, animFrame }: { cubies: readonly Cubie[]; animF
 
 // ── Public component ─────────────────────────────────────────────────────────
 
-const CubeRenderer3D = ({ size = 260 }: { size?: number }) => {
-  const { cubies, animFrame } = useCubeContext();
+interface CubeRenderer3DProps {
+  size?: number;
+}
 
-  return (
-    <div
-      style={{ width: size, height: size }}
-      className="cursor-grab active:cursor-grabbing touch-none select-none"
-    >
-      <Canvas
-        camera={{ position: [5, 4, 5], fov: 40 }}
-        gl={{ antialias: true, powerPreference: 'high-performance' }}
-        dpr={[1, 1.5]}
+const CubeRenderer3D = forwardRef<HTMLDivElement, CubeRenderer3DProps>(
+  ({ size = 260 }, ref) => {
+    const { cubies, animFrame } = useCubeContext();
+
+    return (
+      <div
+        ref={ref}
+        style={{ width: size, height: size }}
+        className="cursor-grab active:cursor-grabbing touch-none select-none"
       >
-        <CubeSceneInner cubies={cubies} animFrame={animFrame} />
-      </Canvas>
-    </div>
-  );
-};
+        <Canvas
+          camera={{ position: [5, 4, 5], fov: 40 }}
+          gl={{ antialias: true, powerPreference: 'high-performance' }}
+          dpr={[1, 1.5]}
+        >
+          <CubeSceneInner cubies={cubies} animFrame={animFrame} />
+        </Canvas>
+      </div>
+    );
+  }
+);
+
+CubeRenderer3D.displayName = 'CubeRenderer3D';
 
 export default CubeRenderer3D;

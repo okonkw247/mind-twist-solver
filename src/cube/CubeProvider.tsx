@@ -70,6 +70,8 @@ export interface CubeContextValue {
   getCubiesInLayer: (face: FaceName) => Cubie[];
   /** Direct access to the model (for advanced use) */
   model: CubeModel;
+  /** Force a re-render after directly mutating the model (advanced use) */
+  bumpVersion: () => void;
 }
 
 const CubeContext = createContext<CubeContextValue | null>(null);
@@ -232,6 +234,10 @@ export function CubeProvider({ children }: { children: ReactNode }) {
     return modelRef.current.getCubiesInLayer(face);
   }, []);
 
+  const bumpVersion = useCallback(() => {
+    setVersion((v) => v + 1);
+  }, []);
+
   // ── Memoized value ───────────────────────────────────────────────────────
 
   const value = useMemo<CubeContextValue>(
@@ -256,6 +262,7 @@ export function CubeProvider({ children }: { children: ReactNode }) {
       isSolved,
       getCubiesInLayer,
       model: modelRef.current,
+      bumpVersion,
     }),
     [
       version,
@@ -275,6 +282,7 @@ export function CubeProvider({ children }: { children: ReactNode }) {
       getFaceletString,
       isSolved,
       getCubiesInLayer,
+      bumpVersion,
     ]
   );
 
