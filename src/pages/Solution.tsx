@@ -1,19 +1,20 @@
 import { useState, Suspense, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Share2, Copy, RotateCcw, Check, Sparkles, GraduationCap, Zap } from 'lucide-react';
+import { ArrowLeft, Share2, Copy, RotateCcw, Check, Sparkles, GraduationCap, Zap, AlertTriangle } from 'lucide-react';
 import AnimatedRubiksCube, { AnimatedCubeHandle } from '@/components/AnimatedRubiksCube';
 import SolveControls from '@/components/SolveControls';
 import confetti from 'canvas-confetti';
-import { CubeMove, parseSolution, invertSolution } from '@/lib/kociembaSolver';
+import { CubeMove, parseSolution, invertSolution, getSolutionMoves } from '@/lib/kociembaSolver';
 
-// Default solution for demo - use parseSolution to create proper CubeMove objects
+// Fallback demo solution when no scan is provided
 const defaultMoves: CubeMove[] = parseSolution("R U R' U' R' F R2 U' R' F'");
 
 interface LocationState {
   solution?: CubeMove[];
   moveCount?: number;
   cubeState?: Record<string, string[]>;
+  faceColors?: string[][];
 }
 
 const faceHighlightColors: Record<string, string> = {
