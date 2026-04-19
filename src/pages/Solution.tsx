@@ -1,19 +1,20 @@
 import { useState, Suspense, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Share2, Copy, RotateCcw, Check, Sparkles, GraduationCap, Zap } from 'lucide-react';
+import { ArrowLeft, Share2, Copy, RotateCcw, Check, Sparkles, GraduationCap, Zap, AlertTriangle } from 'lucide-react';
 import AnimatedRubiksCube, { AnimatedCubeHandle } from '@/components/AnimatedRubiksCube';
 import SolveControls from '@/components/SolveControls';
 import confetti from 'canvas-confetti';
-import { CubeMove, parseSolution, invertSolution } from '@/lib/kociembaSolver';
+import { CubeMove, parseSolution, invertSolution, getSolutionMoves } from '@/lib/kociembaSolver';
 
-// Default solution for demo - use parseSolution to create proper CubeMove objects
+// Fallback demo solution when no scan is provided
 const defaultMoves: CubeMove[] = parseSolution("R U R' U' R' F R2 U' R' F'");
 
 interface LocationState {
   solution?: CubeMove[];
   moveCount?: number;
   cubeState?: Record<string, string[]>;
+  faceColors?: string[][];
 }
 
 const faceHighlightColors: Record<string, string> = {
@@ -44,13 +45,39 @@ const Solution = () => {
   const [learningMode, setLearningMode] = useState(true);
   const [soundEnabled, setSoundEnabled] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
-  
+
+  // Solving state — derived from scanned cubeState (if provided) or fallback
+  const [moves, setMoves] = useState<CubeMove[]>(
+    locationState?.solution ?? (locationState?.cubeState ? [] : defaultMoves)
+  );
+  const [solveStatus, setSolveStatus] = useState<'idle' | 'solving' | 'ready' | 'error'>(
+    locationState?.cubeState && !locationState?.solution ? 'solving' : 'ready'
+  );
+  const [solveError, setSolveError] = useState<string | null>(null);
+
   // Track executed moves for proper step back
   const executedMovesRef = useRef<CubeMove[]>([]);
 
-  // Use solution from navigation state or default
-  const moves = locationState?.solution || defaultMoves;
   const totalMoves = moves.length;
+
+  // Run the Kociemba solver against the scanned state once on mount
+  useEffect(() => {
+    if (locationState?.solution || !locationState?.cubeState) return;
+    let cancelled = false;
+    (async () => {
+      const result = await getSolutionMoves(locationState.cubeState!);
+      if (cancelled) return;
+      if (result.success && result.moves) {
+        setMoves(result.moves);
+        setSolveStatus('ready');
+        setSolveError(null);
+      } else {
+        setSolveStatus('error');
+        setSolveError(result.error ?? 'Could not solve the scanned cube.');
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [locationState]);
   
   // Get animation duration based on speed
   const getAnimationDuration = useCallback(() => {
@@ -207,21 +234,57 @@ const Solution = () => {
       </header>
 
       <main className="pt-16 pb-8 px-4">
-        {/* Success Banner */}
-        <motion.div
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="bg-gradient-to-r from-green-500/20 to-emerald-500/20 border border-green-500/30 rounded-2xl p-4 mb-4 text-center"
-        >
-          <div className="flex items-center justify-center gap-2 mb-1">
-            <Check className="w-5 h-5 text-green-500" />
-            <span className="font-bold text-green-500">Solved!</span>
-            <Sparkles className="w-5 h-5 text-yellow-400" />
-          </div>
-          <p className="text-sm text-muted-foreground">
-            Your cube can be solved in <span className="font-semibold text-foreground">{totalMoves} moves</span>
-          </p>
-        </motion.div>
+        {/* Solver status banner */}
+        {solveStatus === 'solving' && (
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-secondary/60 border border-border rounded-2xl p-4 mb-4 text-center"
+          >
+            <div className="flex items-center justify-center gap-2 mb-1">
+              <div className="w-4 h-4 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+              <span className="font-semibold">Solving your cube…</span>
+            </div>
+            <p className="text-sm text-muted-foreground">Running Kociemba two-phase algorithm</p>
+          </motion.div>
+        )}
+
+        {solveStatus === 'error' && (
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-destructive/10 border border-destructive/40 rounded-2xl p-4 mb-4 text-center"
+          >
+            <div className="flex items-center justify-center gap-2 mb-1">
+              <AlertTriangle className="w-5 h-5 text-destructive" />
+              <span className="font-bold text-destructive">Couldn't solve scan</span>
+            </div>
+            <p className="text-sm text-muted-foreground mb-3">{solveError}</p>
+            <button
+              onClick={() => navigate('/camera')}
+              className="btn-secondary px-4 py-2 text-sm"
+            >
+              Rescan cube
+            </button>
+          </motion.div>
+        )}
+
+        {solveStatus === 'ready' && (
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-gradient-to-r from-green-500/20 to-emerald-500/20 border border-green-500/30 rounded-2xl p-4 mb-4 text-center"
+          >
+            <div className="flex items-center justify-center gap-2 mb-1">
+              <Check className="w-5 h-5 text-green-500" />
+              <span className="font-bold text-green-500">Solved!</span>
+              <Sparkles className="w-5 h-5 text-yellow-400" />
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Your cube can be solved in <span className="font-semibold text-foreground">{totalMoves} moves</span>
+            </p>
+          </motion.div>
+        )}
 
         {/* All Moves Display */}
         <div className="mb-4 p-3 rounded-xl bg-secondary/50 border border-border">

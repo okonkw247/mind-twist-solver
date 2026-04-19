@@ -219,10 +219,15 @@ const CameraInput = () => {
 
           <button
             onClick={() => {
-              if (completedFaces === 6) {
-                camera.stop();
-                navigate('/solution', { state: { faceColors } });
-              }
+              if (completedFaces !== 6) return;
+              camera.stop();
+              // FACES order during capture: [F, R, U, D, L, B]
+              // Kociemba/solver state keys: up, right, front, down, left, back
+              const [F, R, U, D, L, B] = faceColors;
+              const cubeState: Record<string, string[]> = {
+                up: U, right: R, front: F, down: D, left: L, back: B,
+              };
+              navigate('/solution', { state: { cubeState, faceColors } });
             }}
             disabled={completedFaces < 6}
             className="btn-secondary w-full h-14 flex items-center justify-center gap-2 disabled:opacity-50"
