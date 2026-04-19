@@ -6,7 +6,8 @@ import CubeRenderer3D from '@/components/CubeRenderer3D';
 import { useCubeContext } from '@/cube/CubeProvider';
 import SolveControls from '@/components/SolveControls';
 import confetti from 'canvas-confetti';
-import { CubeMove, parseSolution, getSolutionMoves, getInverseNotation } from '@/lib/kociembaSolver';
+import { CubeMove, parseSolution, getSolutionMoves } from '@/lib/kociembaSolver';
+import { getInverseNotation } from '@/cube/CubeModel';
 
 // Fallback demo moves if no scan/state was passed
 const defaultMoves: CubeMove[] = parseSolution("R U R' U' R' F R2 U' R' F'");
