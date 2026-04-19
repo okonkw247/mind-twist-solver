@@ -234,6 +234,10 @@ export function CubeProvider({ children }: { children: ReactNode }) {
     return modelRef.current.getCubiesInLayer(face);
   }, []);
 
+  const bumpVersion = useCallback(() => {
+    setVersion((v) => v + 1);
+  }, []);
+
   // ── Memoized value ───────────────────────────────────────────────────────
 
   const value = useMemo<CubeContextValue>(
@@ -258,6 +262,7 @@ export function CubeProvider({ children }: { children: ReactNode }) {
       isSolved,
       getCubiesInLayer,
       model: modelRef.current,
+      bumpVersion,
     }),
     [
       version,
@@ -277,6 +282,7 @@ export function CubeProvider({ children }: { children: ReactNode }) {
       getFaceletString,
       isSolved,
       getCubiesInLayer,
+      bumpVersion,
     ]
   );
 
