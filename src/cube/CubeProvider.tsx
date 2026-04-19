@@ -70,6 +70,8 @@ export interface CubeContextValue {
   getCubiesInLayer: (face: FaceName) => Cubie[];
   /** Direct access to the model (for advanced use) */
   model: CubeModel;
+  /** Force a re-render after directly mutating the model (advanced use) */
+  bumpVersion: () => void;
 }
 
 const CubeContext = createContext<CubeContextValue | null>(null);
