@@ -45,13 +45,39 @@ const Solution = () => {
   const [learningMode, setLearningMode] = useState(true);
   const [soundEnabled, setSoundEnabled] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
-  
+
+  // Solving state — derived from scanned cubeState (if provided) or fallback
+  const [moves, setMoves] = useState<CubeMove[]>(
+    locationState?.solution ?? (locationState?.cubeState ? [] : defaultMoves)
+  );
+  const [solveStatus, setSolveStatus] = useState<'idle' | 'solving' | 'ready' | 'error'>(
+    locationState?.cubeState && !locationState?.solution ? 'solving' : 'ready'
+  );
+  const [solveError, setSolveError] = useState<string | null>(null);
+
   // Track executed moves for proper step back
   const executedMovesRef = useRef<CubeMove[]>([]);
 
-  // Use solution from navigation state or default
-  const moves = locationState?.solution || defaultMoves;
   const totalMoves = moves.length;
+
+  // Run the Kociemba solver against the scanned state once on mount
+  useEffect(() => {
+    if (locationState?.solution || !locationState?.cubeState) return;
+    let cancelled = false;
+    (async () => {
+      const result = await getSolutionMoves(locationState.cubeState!);
+      if (cancelled) return;
+      if (result.success && result.moves) {
+        setMoves(result.moves);
+        setSolveStatus('ready');
+        setSolveError(null);
+      } else {
+        setSolveStatus('error');
+        setSolveError(result.error ?? 'Could not solve the scanned cube.');
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [locationState]);
   
   // Get animation duration based on speed
   const getAnimationDuration = useCallback(() => {
