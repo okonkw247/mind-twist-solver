@@ -87,13 +87,11 @@ const Solution = () => {
       // Reset move history so user-driven step counters stay clean
       (cube.model as unknown as { _moveHistory: string[] })._moveHistory = [];
       cube.setSpeed(prevSpeed);
+      cube.bumpVersion();
 
       setMoves(result.moves);
       setSolveStatus('ready');
       setSolveError(null);
-
-      // Bump version on next tick so renderer re-reads cubies
-      setTimeout(() => cube.reset.length, 0);
     })();
 
     return () => { cancelled = true; };
@@ -135,7 +133,6 @@ const Solution = () => {
   const handleRestart = useCallback(() => {
     setIsPlaying(false);
     setCurrentStep(0);
-    // Re-seed: if we have a cubeState, replay the seeding logic by triggering effect re-run
     cube.reset();
     if (locationState?.cubeState && moves.length > 0) {
       const inverseNotations = [...moves].reverse().map((m) => getInverseNotation(m.notation));
@@ -143,6 +140,7 @@ const Solution = () => {
         cube.model.applyMove(n);
       }
       (cube.model as unknown as { _moveHistory: string[] })._moveHistory = [];
+      cube.bumpVersion();
     }
   }, [cube, locationState, moves]);
 
