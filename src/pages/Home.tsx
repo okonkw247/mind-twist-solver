@@ -1,32 +1,17 @@
-import { Suspense, useState, useEffect } from 'react';
+import { Suspense, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Settings, Trophy, Play, Puzzle, Star } from 'lucide-react';
 import CubeRenderer3D from '@/components/CubeRenderer3D';
-import { useCubeContext } from '@/cube/CubeProvider';
 import BottomNav from '@/components/BottomNav';
 import StatCard from '@/components/StatCard';
-import { generateScramble, parseSolution } from '@/lib/kociembaSolver';
 
 const Home = () => {
   const navigate = useNavigate();
-  const cube = useCubeContext();
   const [bestTime] = useState('00:42.15');
   const [solveCount] = useState(1284);
   const [currentLevel] = useState(12);
   const [rank] = useState('GRANDMASTER');
-
-  // Auto-scramble on mount for visual effect
-  useEffect(() => {
-    if (cube.isAnimating) return;
-    cube.setSpeed('fast');
-    const scramble = generateScramble(8);
-    const moves = parseSolution(scramble);
-    cube.enqueue(moves.map(m => m.notation));
-    // Reset speed after a delay
-    const timer = setTimeout(() => cube.setSpeed('normal'), 3000);
-    return () => clearTimeout(timer);
-  }, []);
 
   return (
     <div className="min-h-screen bg-background pb-24">
@@ -77,7 +62,7 @@ const Home = () => {
                 <div className="w-12 h-12 border-4 border-primary/30 border-t-primary rounded-full animate-spin" />
               </div>
             }>
-              <CubeRenderer3D size={220} />
+              <CubeRenderer3D size={220} interactive={false} autoRotateIdle />
             </Suspense>
           </div>
         </motion.div>
