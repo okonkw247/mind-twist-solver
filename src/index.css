@@ -2,44 +2,44 @@
 @tailwind components;
 @tailwind utilities;
 
-/* JSN Solving - Dark Gaming Theme PWA */
+/* JSN Solver — SaaS PWA theme (neutral, professional) */
 
 @layer base {
   :root {
-    /* Core dark theme - Deep navy/slate */
-    --background: 230 25% 7%;
-    --foreground: 0 0% 98%;
-    
-    --card: 230 25% 11%;
-    --card-foreground: 0 0% 98%;
-    
-    --popover: 230 25% 11%;
-    --popover-foreground: 0 0% 98%;
-    
-    /* Primary - Vibrant blue/purple */
-    --primary: 245 100% 60%;
+    /* Core neutral surfaces */
+    --background: 220 14% 9%;
+    --foreground: 210 20% 98%;
+
+    --card: 220 14% 12%;
+    --card-foreground: 210 20% 98%;
+
+    --popover: 220 14% 12%;
+    --popover-foreground: 210 20% 98%;
+
+    /* Primary — calm slate-blue, no neon */
+    --primary: 217 91% 60%;
     --primary-foreground: 0 0% 100%;
-    
-    /* Secondary - Dark panels */
-    --secondary: 230 20% 15%;
-    --secondary-foreground: 0 0% 98%;
-    
-    --muted: 230 15% 25%;
-    --muted-foreground: 230 10% 55%;
-    
-    /* Accent - Bright blue */
-    --accent: 220 100% 55%;
+
+    /* Secondary — surface panel */
+    --secondary: 220 14% 16%;
+    --secondary-foreground: 210 20% 98%;
+
+    --muted: 220 14% 22%;
+    --muted-foreground: 215 16% 65%;
+
+    /* Accent — same family, slightly desaturated */
+    --accent: 217 91% 60%;
     --accent-foreground: 0 0% 100%;
-    
-    --destructive: 0 84% 60%;
+
+    --destructive: 0 72% 55%;
     --destructive-foreground: 0 0% 100%;
-    
-    --border: 230 20% 18%;
-    --input: 230 20% 18%;
-    --ring: 245 100% 60%;
-    
-    --radius: 1rem;
-    
+
+    --border: 220 14% 20%;
+    --input: 220 14% 20%;
+    --ring: 217 91% 60%;
+
+    --radius: 0.875rem;
+
     /* Cube face colors */
     --cube-white: 0 0% 95%;
     --cube-yellow: 48 100% 50%;
@@ -47,22 +47,21 @@
     --cube-orange: 30 100% 50%;
     --cube-blue: 220 100% 50%;
     --cube-green: 140 80% 45%;
-    
-    /* Custom accent colors */
-    --gold: 45 100% 50%;
-    --cyan: 187 100% 50%;
-    --purple: 258 90% 66%;
-    --magenta: 292 91% 58%;
-    
-    /* Sidebar - same as card */
-    --sidebar-background: 230 25% 9%;
-    --sidebar-foreground: 0 0% 98%;
-    --sidebar-primary: 245 100% 60%;
+
+    /* Muted accent tokens (kept for legacy refs) */
+    --gold: 45 90% 55%;
+    --cyan: 187 70% 50%;
+    --purple: 258 60% 60%;
+    --magenta: 292 60% 55%;
+
+    --sidebar-background: 220 14% 11%;
+    --sidebar-foreground: 210 20% 98%;
+    --sidebar-primary: 217 91% 60%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 220 100% 55%;
+    --sidebar-accent: 217 91% 60%;
     --sidebar-accent-foreground: 0 0% 100%;
-    --sidebar-border: 230 20% 18%;
-    --sidebar-ring: 245 100% 60%;
+    --sidebar-border: 220 14% 20%;
+    --sidebar-ring: 217 91% 60%;
   }
 }
 
