@@ -163,6 +163,11 @@ const Solver = () => {
           </Suspense>
         </motion.div>
 
+        <div className="flex justify-center mb-4">
+          <CubeControlPad />
+        </div>
+
+
         <AnimatePresence>
           {solution.length > 0 && (
             <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="mb-4">
