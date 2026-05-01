@@ -111,25 +111,22 @@
     @apply text-2xl font-bold text-foreground tabular-nums;
   }
   
-  /* Primary button - Blue/purple gradient */
+  /* Primary button — flat solid (SaaS) */
   .btn-primary {
-    @apply relative overflow-hidden rounded-xl px-8 py-4 font-bold text-white transition-all duration-200;
-    background: linear-gradient(135deg, hsl(245 100% 60%), hsl(220 100% 55%));
+    @apply relative rounded-xl px-6 py-3 font-semibold text-primary-foreground transition-colors duration-150;
+    background: hsl(var(--primary));
   }
-  
+
   .btn-primary:hover {
-    transform: scale(1.02);
-    box-shadow: 0 8px 24px hsl(245 100% 60% / 0.3);
+    background: hsl(217 91% 55%);
   }
-  
+
   .btn-primary:active {
-    transform: scale(0.98);
+    background: hsl(217 91% 50%);
   }
-  
+
   .btn-primary:disabled {
     @apply opacity-50 cursor-not-allowed;
-    transform: none;
-    box-shadow: none;
   }
   
   /* Secondary button - Dark with border */
