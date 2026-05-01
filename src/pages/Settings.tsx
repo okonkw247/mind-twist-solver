@@ -99,6 +99,55 @@ const Settings = () => {
           <span className="text-primary text-sm font-medium">v1.2</span>
         </motion.div>
 
+        {/* Cube Animation */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.05 }}
+          className="glass-card mb-4"
+        >
+          <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-3">
+            Cube Animation
+          </h3>
+
+          <div className="space-y-4">
+            <div>
+              <div className="flex items-center gap-3 mb-2">
+                <div className="w-10 h-10 rounded-xl bg-secondary flex items-center justify-center text-primary">
+                  <Gauge className="w-5 h-5" />
+                </div>
+                <div className="flex-1">
+                  <p className="font-medium">Animation Speed</p>
+                  <p className="text-xs text-muted-foreground">Applies to every screen</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-3 gap-2 mt-2">
+                {(['slow', 'normal', 'fast'] as AnimationSpeed[]).map((s) => (
+                  <button
+                    key={s}
+                    onClick={() => setAnimationSpeed(s)}
+                    className={cn(
+                      'py-2 rounded-lg text-sm font-semibold capitalize transition-all',
+                      'border border-border',
+                      animationSpeed === s
+                        ? 'bg-primary text-primary-foreground border-primary'
+                        : 'bg-secondary text-foreground hover:bg-muted',
+                    )}
+                  >
+                    {s}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <SettingRow
+              icon={RefreshCw}
+              label="Idle Auto-Rotate"
+              rightContent={<ToggleSwitch enabled={idleAutoRotate} onChange={setIdleAutoRotate} />}
+            />
+          </div>
+        </motion.div>
+
         {/* Game Settings */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
