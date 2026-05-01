@@ -1,5 +1,5 @@
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Home, Puzzle, Trophy, User, Map, ShoppingBag, Box, Settings, BarChart3, GraduationCap } from 'lucide-react';
+import { Home, Puzzle, Trophy, User, Camera, Settings } from 'lucide-react';
 
 interface NavItem {
   icon: React.ElementType;
@@ -8,65 +8,40 @@ interface NavItem {
 }
 
 interface BottomNavProps {
+  // variant kept for back-compat but all surfaces now share the SaaS nav
   variant?: 'home' | 'solver' | 'map' | 'collection' | 'profile' | 'timer';
 }
 
-const navConfigs: Record<string, NavItem[]> = {
-  home: [
-    { icon: Box, label: 'COLLECTION', path: '/collection' },
-    { icon: Home, label: 'HOME', path: '/home' },
-    { icon: ShoppingBag, label: 'STORE', path: '/premium' },
-  ],
-  solver: [
-    { icon: Puzzle, label: 'Solver', path: '/solver' },
-    { icon: Trophy, label: 'Timer', path: '/timer' },
-    { icon: Settings, label: 'Settings', path: '/settings' },
-  ],
-  map: [
-    { icon: Map, label: 'MAP', path: '/play-cube' },
-    { icon: Box, label: 'CUBES', path: '/collection' },
-    { icon: ShoppingBag, label: 'SHOP', path: '/premium' },
-    { icon: User, label: 'PROFILE', path: '/profile' },
-  ],
-  collection: [
-    { icon: Puzzle, label: 'PLAY', path: '/play-cube' },
-    { icon: Box, label: 'SKINS', path: '/collection' },
-    { icon: Trophy, label: 'RANK', path: '/timer' },
-    { icon: Settings, label: 'MENU', path: '/settings' },
-  ],
-  profile: [
-    { icon: Puzzle, label: 'Solve', path: '/solver' },
-    { icon: BarChart3, label: 'Rankings', path: '/timer' },
-    { icon: GraduationCap, label: 'Learn', path: '/premium' },
-    { icon: User, label: 'Profile', path: '/profile' },
-  ],
-  timer: [
-    { icon: Puzzle, label: 'Solver', path: '/solver' },
-    { icon: Trophy, label: 'Timer', path: '/timer' },
-    { icon: Settings, label: 'Settings', path: '/settings' },
-  ],
-};
+// Single SaaS bottom nav across all screens.
+const ITEMS: NavItem[] = [
+  { icon: Home, label: 'Home', path: '/home' },
+  { icon: Camera, label: 'Scan', path: '/camera' },
+  { icon: Puzzle, label: 'Solver', path: '/solver' },
+  { icon: Trophy, label: 'Timer', path: '/timer' },
+  { icon: User, label: 'Profile', path: '/profile' },
+  { icon: Settings, label: 'Settings', path: '/settings' },
+];
 
-const BottomNav = ({ variant = 'home' }: BottomNavProps) => {
+const BottomNav = (_props: BottomNavProps) => {
   const navigate = useNavigate();
   const location = useLocation();
-  const items = navConfigs[variant] || navConfigs.home;
 
   return (
     <nav className="bottom-nav">
-      <div className="flex items-center justify-around">
-        {items.map((item) => {
+      <div className="flex items-center justify-around max-w-xl mx-auto">
+        {ITEMS.map((item) => {
           const isActive = location.pathname === item.path;
           const Icon = item.icon;
-          
           return (
             <button
               key={item.path}
               onClick={() => navigate(item.path)}
               className={`bottom-nav-item flex-1 ${isActive ? 'active' : ''}`}
+              aria-label={item.label}
+              aria-current={isActive ? 'page' : undefined}
             >
-              <Icon className={`w-6 h-6 ${isActive ? 'text-primary' : ''}`} />
-              <span className="text-[10px] font-semibold tracking-wide uppercase">
+              <Icon className={`w-5 h-5 ${isActive ? 'text-primary' : ''}`} />
+              <span className="text-[10px] font-medium tracking-wide">
                 {item.label}
               </span>
             </button>
