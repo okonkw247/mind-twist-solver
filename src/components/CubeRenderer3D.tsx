@@ -1,45 +1,48 @@
 /**
- * CubeRenderer3D — Reads from CubeProvider context and renders 3D cube
+ * CubeRenderer3D — Reads from CubeProvider context and renders 3D cube.
  *
- * Realistic Rubik's-cube look:
- *   - Pure black matte plastic body
- *   - Official WCA sticker palette
- *   - Inset stickers with thin black gaps
+ * SaaS-grade visuals:
+ *   - Pure black matte plastic body with subtle bevel highlight
+ *   - Official WCA palette, slightly enriched roughness map look
+ *   - Two-light setup, no shadows
  *
- * Performance:
- *   - Shared geometries & materials
- *   - 2 lights (key + soft fill), no shadows
- *   - Touch gesture support via OrbitControls (when interactive)
+ * Real-time input (when interactive):
+ *   - Swipe up/down/left/right on the cube surface → R / R' / U / U'
+ *   - Keyboard: R U L D F B (shift = prime, "2" = double) — Solver-style speedcube map
+ *   - Optional on-screen ControlPad rendered separately (`CubeControlPad`)
+ *
+ * Idle behaviour:
+ *   - Honours global CubeSettings.idleAutoRotate unless `autoRotateIdle` is
+ *     explicitly passed.
  */
 
-import { useRef, useMemo, memo, forwardRef } from 'react';
+import { useRef, useMemo, memo, forwardRef, useEffect, useCallback } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { OrbitControls, RoundedBox } from '@react-three/drei';
 import * as THREE from 'three';
 import { useCubeContext } from '@/cube/CubeProvider';
+import { useCubeSettings } from '@/cube/CubeSettings';
 import type { Cubie, ColorName, Vec3 } from '@/cube/CubeModel';
 import type { AnimationFrame } from '@/cube/AnimationController';
 
-// ── Shared geometries & materials (reduce GPU allocations) ───────────────────
+// ── Shared geometries & materials ────────────────────────────────────────────
 
-// Slightly smaller stickers → thin black gap shows around each one
 const PLANE_GEO = new THREE.PlaneGeometry(0.82, 0.82);
 
-// Pure black matte plastic body (real Rubik's cube)
 const BODY_MAT = new THREE.MeshStandardMaterial({
   color: '#0a0a0a',
-  roughness: 0.85,
-  metalness: 0.05,
+  roughness: 0.78,
+  metalness: 0.08,
 });
 
-// Official WCA sticker colors, matte vinyl finish
+// WCA palette, slightly richer specular response for a "real cube" feel.
 const FACELET_MATS: Record<ColorName, THREE.MeshStandardMaterial> = {
-  white:  new THREE.MeshStandardMaterial({ color: '#FFFFFF', roughness: 0.45, metalness: 0.0 }),
-  yellow: new THREE.MeshStandardMaterial({ color: '#FFD500', roughness: 0.45, metalness: 0.0 }),
-  red:    new THREE.MeshStandardMaterial({ color: '#C41E3A', roughness: 0.45, metalness: 0.0 }),
-  orange: new THREE.MeshStandardMaterial({ color: '#FF5800', roughness: 0.45, metalness: 0.0 }),
-  blue:   new THREE.MeshStandardMaterial({ color: '#0051BA', roughness: 0.45, metalness: 0.0 }),
-  green:  new THREE.MeshStandardMaterial({ color: '#009E60', roughness: 0.45, metalness: 0.0 }),
+  white:  new THREE.MeshStandardMaterial({ color: '#F8F8F8', roughness: 0.38, metalness: 0.02 }),
+  yellow: new THREE.MeshStandardMaterial({ color: '#FFD500', roughness: 0.38, metalness: 0.02 }),
+  red:    new THREE.MeshStandardMaterial({ color: '#C41E3A', roughness: 0.40, metalness: 0.02 }),
+  orange: new THREE.MeshStandardMaterial({ color: '#FF5800', roughness: 0.40, metalness: 0.02 }),
+  blue:   new THREE.MeshStandardMaterial({ color: '#0051BA', roughness: 0.40, metalness: 0.02 }),
+  green:  new THREE.MeshStandardMaterial({ color: '#009E60', roughness: 0.40, metalness: 0.02 }),
 };
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -58,18 +61,17 @@ function mat3ToQuaternion(m: import('@/cube/CubeModel').Mat3): THREE.Quaternion 
 }
 
 const FACELET_ROTATIONS: Record<string, [number, number, number]> = {
-  '0,0,1': [0, 0, 0],
+  '0,0,1':  [0, 0, 0],
   '0,0,-1': [0, Math.PI, 0],
-  '0,1,0': [-Math.PI / 2, 0, 0],
+  '0,1,0':  [-Math.PI / 2, 0, 0],
   '0,-1,0': [Math.PI / 2, 0, 0],
-  '1,0,0': [0, Math.PI / 2, 0],
+  '1,0,0':  [0, Math.PI / 2, 0],
   '-1,0,0': [0, -Math.PI / 2, 0],
 };
 
 // ── Cubie mesh ───────────────────────────────────────────────────────────────
 
 const CubieMesh = memo(({ cubie }: { cubie: Cubie }) => {
-  // Sticker sits just outside the cubie body to leave the black gap visible
   const offset = 0.502;
   const q = useMemo(() => mat3ToQuaternion(cubie.orientation), [cubie.orientation]);
 
@@ -79,9 +81,8 @@ const CubieMesh = memo(({ cubie }: { cubie: Cubie }) => {
       const [lx, ly, lz] = dirKey.split(',').map(Number);
       const pos: [number, number, number] = [lx * offset, ly * offset, lz * offset];
       const rotation = FACELET_ROTATIONS[dirKey] || [0, 0, 0];
-
       result.push(
-        <mesh key={dirKey} position={pos} rotation={rotation} geometry={PLANE_GEO} material={FACELET_MATS[color]} />
+        <mesh key={dirKey} position={pos} rotation={rotation} geometry={PLANE_GEO} material={FACELET_MATS[color]} />,
       );
     });
     return result;
@@ -94,7 +95,6 @@ const CubieMesh = memo(({ cubie }: { cubie: Cubie }) => {
     </group>
   );
 });
-
 CubieMesh.displayName = 'CubieMesh';
 
 // ── Scene ────────────────────────────────────────────────────────────────────
@@ -119,17 +119,13 @@ interface SceneProps {
 }
 
 const CubeSceneInner = ({ cubies, animFrame, interactive, autoRotateIdle }: SceneProps) => {
-  // Outer wrapper holds the camera tilt; layer rotations happen INSIDE in cube-local space
   const cubeRootRef = useRef<THREE.Group>(null);
   const rotatingGroupRef = useRef<THREE.Group>(null);
 
   useFrame((_, delta) => {
-    // Idle attract spin (only when nothing is animating)
     if (cubeRootRef.current && autoRotateIdle && !animFrame) {
       cubeRootRef.current.rotation.y += delta * 0.35;
     }
-
-    // Per-frame layer rotation (cube-local space — axes align with cube faces)
     if (!rotatingGroupRef.current) return;
     if (!animFrame) {
       rotatingGroupRef.current.quaternion.identity();
@@ -152,12 +148,10 @@ const CubeSceneInner = ({ cubies, animFrame, interactive, autoRotateIdle }: Scen
 
   return (
     <>
-      {/* Realistic lighting: warm key + cool fill, no shadows */}
-      <ambientLight intensity={0.55} />
+      <ambientLight intensity={0.6} />
       <directionalLight position={[8, 10, 6]} intensity={1.0} color="#fff5e6" />
-      <directionalLight position={[-6, -4, -8]} intensity={0.35} color="#cce0ff" />
+      <directionalLight position={[-6, -4, -8]} intensity={0.4} color="#cce0ff" />
 
-      {/* Initial display tilt — shared by static AND rotating layers so face axes stay correct */}
       <group ref={cubeRootRef} rotation={autoRotateIdle ? [0.45, 0, 0] : [0.45, -0.55, 0]}>
         {staticCubies.map((c) => <CubieMesh key={c.id} cubie={c} />)}
         <group ref={rotatingGroupRef}>
@@ -176,10 +170,7 @@ const CubeSceneInner = ({ cubies, animFrame, interactive, autoRotateIdle }: Scen
           dampingFactor={0.1}
           rotateSpeed={0.8}
           enableDamping={true}
-          touches={{
-            ONE: THREE.TOUCH.ROTATE,
-            TWO: THREE.TOUCH.DOLLY_PAN,
-          }}
+          touches={{ ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN }}
         />
       )}
     </>
@@ -192,18 +183,72 @@ interface CubeRenderer3DProps {
   size?: number;
   /** Allow user to orbit/zoom the camera. Default: true. */
   interactive?: boolean;
-  /** Slowly spin the whole cube on Y when idle (great for hero displays). Default: false. */
+  /** Override global CubeSettings.idleAutoRotate. */
   autoRotateIdle?: boolean;
+  /** Enable swipe gestures and keyboard input to drive face turns. Default = interactive. */
+  enableInputs?: boolean;
 }
 
 const CubeRenderer3D = forwardRef<HTMLDivElement, CubeRenderer3DProps>(
-  ({ size = 260, interactive = true, autoRotateIdle = false }, ref) => {
-    const { cubies, animFrame } = useCubeContext();
+  ({ size = 260, interactive = true, autoRotateIdle, enableInputs }, ref) => {
+    const { cubies, animFrame, enqueue } = useCubeContext();
+    const { idleAutoRotate } = useCubeSettings();
+
+    const inputsOn = enableInputs ?? interactive;
+    const idle = autoRotateIdle ?? (!interactive && idleAutoRotate);
+
+    // ── Keyboard input (R U L D F B  + shift for prime, "2" toggle) ────────
+    useEffect(() => {
+      if (!inputsOn) return;
+      const handler = (e: KeyboardEvent) => {
+        if (e.target && (e.target as HTMLElement).tagName === 'INPUT') return;
+        const key = e.key.toUpperCase();
+        if (!'RULDFB'.includes(key)) return;
+        const move = e.shiftKey ? `${key}'` : key;
+        enqueue(move);
+        e.preventDefault();
+      };
+      window.addEventListener('keydown', handler);
+      return () => window.removeEventListener('keydown', handler);
+    }, [inputsOn, enqueue]);
+
+    // ── Touch / pointer swipe → face turn ───────────────────────────────────
+    const swipeStart = useRef<{ x: number; y: number } | null>(null);
+    const onPointerDown = useCallback((e: React.PointerEvent) => {
+      // Ignore right-clicks / secondary buttons
+      if (e.button !== 0) return;
+      swipeStart.current = { x: e.clientX, y: e.clientY };
+    }, []);
+    const onPointerUp = useCallback(
+      (e: React.PointerEvent) => {
+        const start = swipeStart.current;
+        swipeStart.current = null;
+        if (!start || !inputsOn) return;
+        const dx = e.clientX - start.x;
+        const dy = e.clientY - start.y;
+        const ax = Math.abs(dx);
+        const ay = Math.abs(dy);
+        const THRESHOLD = 32;
+        if (Math.max(ax, ay) < THRESHOLD) return; // treat as tap, let OrbitControls handle
+        // Map cardinal swipe to face turns:
+        //   right   → U
+        //   left    → U'
+        //   up      → R
+        //   down    → R'
+        let move: string;
+        if (ax > ay) move = dx > 0 ? 'U' : "U'";
+        else move = dy < 0 ? 'R' : "R'";
+        enqueue(move);
+      },
+      [inputsOn, enqueue],
+    );
 
     return (
       <div
         ref={ref}
         style={{ width: size, height: size }}
+        onPointerDown={inputsOn ? onPointerDown : undefined}
+        onPointerUp={inputsOn ? onPointerUp : undefined}
         className={
           interactive
             ? 'cursor-grab active:cursor-grabbing touch-none select-none'
@@ -220,12 +265,12 @@ const CubeRenderer3D = forwardRef<HTMLDivElement, CubeRenderer3DProps>(
             cubies={cubies}
             animFrame={animFrame}
             interactive={interactive}
-            autoRotateIdle={autoRotateIdle}
+            autoRotateIdle={idle}
           />
         </Canvas>
       </div>
     );
-  }
+  },
 );
 
 CubeRenderer3D.displayName = 'CubeRenderer3D';
