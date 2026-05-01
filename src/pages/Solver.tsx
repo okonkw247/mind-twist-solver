@@ -6,6 +6,7 @@ import {
   ChevronLeft, ChevronRight, Copy, Check
 } from 'lucide-react';
 import CubeRenderer3D from '@/components/CubeRenderer3D';
+import CubeControlPad from '@/components/CubeControlPad';
 import { useCubeContext } from '@/cube/CubeProvider';
 import BottomNav from '@/components/BottomNav';
 import StatCard from '@/components/StatCard';
@@ -134,7 +135,7 @@ const Solver = () => {
           {isRunning ? <Pause className="w-6 h-6" /> : <Play className="w-6 h-6" />}
         </button>
         <h1 className="text-xl font-bold tracking-wider">3X3 SOLVER</h1>
-        <button onClick={() => navigate('/premium')} className="btn-icon" aria-label="Settings">
+        <button onClick={() => navigate('/settings')} className="btn-icon" aria-label="Settings">
           <Settings className="w-6 h-6" />
         </button>
       </header>
@@ -161,6 +162,11 @@ const Solver = () => {
             <CubeRenderer3D size={260} />
           </Suspense>
         </motion.div>
+
+        <div className="flex justify-center mb-4">
+          <CubeControlPad />
+        </div>
+
 
         <AnimatePresence>
           {solution.length > 0 && (

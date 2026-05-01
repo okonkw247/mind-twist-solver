@@ -1,115 +1,101 @@
-import { Suspense, useState } from 'react';
+import { Suspense } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Settings, Trophy, Play, Puzzle, Star } from 'lucide-react';
+import { Settings as SettingsIcon, Camera, Puzzle, Timer as TimerIcon } from 'lucide-react';
 import CubeRenderer3D from '@/components/CubeRenderer3D';
 import BottomNav from '@/components/BottomNav';
-import StatCard from '@/components/StatCard';
 
 const Home = () => {
   const navigate = useNavigate();
-  const [bestTime] = useState('00:42.15');
-  const [solveCount] = useState(1284);
-  const [currentLevel] = useState(12);
-  const [rank] = useState('GRANDMASTER');
 
   return (
     <div className="min-h-screen bg-background pb-24">
-      <header className="flex items-center justify-between px-4 py-4 safe-top">
-        <button onClick={() => navigate('/premium')} className="btn-icon" aria-label="Settings">
-          <Settings className="w-6 h-6" />
-        </button>
-        <h1 className="text-xl font-bold tracking-wider">JSN SOLVER</h1>
-        <button onClick={() => navigate('/timer')} className="btn-icon" aria-label="Achievements">
-          <Trophy className="w-6 h-6" />
+      <header className="flex items-center justify-between px-4 py-4 safe-top max-w-xl mx-auto">
+        <div>
+          <h1 className="text-lg font-semibold tracking-tight">JSN Solver</h1>
+          <p className="text-xs text-muted-foreground">Real-time Rubik's cube workspace</p>
+        </div>
+        <button
+          onClick={() => navigate('/settings')}
+          className="btn-icon"
+          aria-label="Settings"
+        >
+          <SettingsIcon className="w-5 h-5" />
         </button>
       </header>
 
-      <main className="px-4">
-        {/* Daily Challenge Card */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
+      <main className="px-4 max-w-xl mx-auto">
+        {/* 3D Cube hero */}
+        <motion.section
+          initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
-          className="glass-card mb-6 flex items-center justify-between"
+          className="rounded-2xl bg-card border border-border p-6 mb-6"
         >
-          <div className="flex-1">
-            <div className="flex items-center gap-2 mb-1">
-              <div className="w-2 h-2 rounded-full bg-destructive animate-pulse" />
-              <span className="text-xs font-semibold text-destructive uppercase tracking-wider">Daily Challenge</span>
-            </div>
-            <h3 className="text-lg font-bold mb-1">Mirror Scramble</h3>
-            <p className="text-sm text-muted-foreground mb-3">Beat 00:30 to win 500 Gold</p>
-            <button onClick={() => navigate('/play-cube')} className="btn-primary py-2 px-6 text-sm">Join Now</button>
-          </div>
-          <div className="w-20 h-20 rounded-full bg-secondary/50 flex items-center justify-center">
-            <Puzzle className="w-10 h-10 text-muted-foreground" />
-          </div>
-        </motion.div>
-
-        {/* 3D Cube Display */}
-        <motion.div
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ delay: 0.1 }}
-          className="relative rounded-3xl bg-gradient-to-br from-card to-secondary/50 p-6 mb-6 overflow-hidden"
-        >
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-            <div className="w-64 h-64 rounded-full bg-primary/10 blur-3xl" />
-          </div>
-          <div className="relative flex justify-center py-4">
-            <Suspense fallback={
-              <div className="w-48 h-48 flex items-center justify-center">
-                <div className="w-12 h-12 border-4 border-primary/30 border-t-primary rounded-full animate-spin" />
-              </div>
-            }>
-              <CubeRenderer3D size={220} interactive={false} autoRotateIdle />
+          <div className="flex justify-center py-2">
+            <Suspense
+              fallback={
+                <div className="w-56 h-56 flex items-center justify-center">
+                  <div className="w-10 h-10 border-2 border-muted border-t-primary rounded-full animate-spin" />
+                </div>
+              }
+            >
+              <CubeRenderer3D size={240} interactive={false} />
             </Suspense>
           </div>
-        </motion.div>
+          <p className="text-center text-sm text-muted-foreground mt-2">
+            Honors your speed &amp; idle-rotate preferences
+          </p>
+        </motion.section>
 
-        {/* Rank Badge */}
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
+        {/* Quick actions */}
+        <motion.section
+          initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-          className="flex justify-center mb-6"
+          transition={{ delay: 0.1 }}
+          className="grid gap-3"
         >
-          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-secondary border border-border">
-            <Star className="w-4 h-4 text-gold fill-gold" />
-            <span className="text-sm font-semibold tracking-wider">{rank} RANK</span>
-          </div>
-        </motion.div>
-
-        {/* Stats Grid */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3 }}
-          className="grid grid-cols-2 gap-4 mb-6"
-        >
-          <StatCard label="BEST TIME" value={bestTime} />
-          <StatCard label="SOLVES" value={solveCount.toLocaleString()} />
-        </motion.div>
-
-        {/* Action Buttons */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.4 }}
-          className="space-y-3"
-        >
-          <button onClick={() => navigate('/play-cube')} className="btn-primary w-full h-14 flex items-center justify-center gap-3 text-lg">
-            <Play className="w-6 h-6" />
-            PLAY GAME - LEVEL {currentLevel}
+          <button
+            onClick={() => navigate('/camera')}
+            className="w-full flex items-center gap-3 p-4 rounded-xl bg-card border border-border hover:bg-secondary transition-colors text-left"
+          >
+            <div className="w-10 h-10 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
+              <Camera className="w-5 h-5" />
+            </div>
+            <div className="flex-1">
+              <p className="font-semibold">Scan a cube</p>
+              <p className="text-xs text-muted-foreground">Use your camera to capture all six faces</p>
+            </div>
           </button>
-          <button onClick={() => navigate('/solver')} className="btn-secondary w-full h-14 flex items-center justify-center gap-3 text-lg">
-            <Puzzle className="w-5 h-5" />
-            FREE PLAY
+
+          <button
+            onClick={() => navigate('/solver')}
+            className="w-full flex items-center gap-3 p-4 rounded-xl bg-card border border-border hover:bg-secondary transition-colors text-left"
+          >
+            <div className="w-10 h-10 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
+              <Puzzle className="w-5 h-5" />
+            </div>
+            <div className="flex-1">
+              <p className="font-semibold">Open solver</p>
+              <p className="text-xs text-muted-foreground">Shuffle, hint, and step through solutions</p>
+            </div>
           </button>
-        </motion.div>
+
+          <button
+            onClick={() => navigate('/timer')}
+            className="w-full flex items-center gap-3 p-4 rounded-xl bg-card border border-border hover:bg-secondary transition-colors text-left"
+          >
+            <div className="w-10 h-10 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
+              <TimerIcon className="w-5 h-5" />
+            </div>
+            <div className="flex-1">
+              <p className="font-semibold">WCA timer</p>
+              <p className="text-xs text-muted-foreground">15s inspection, +2 / DNF penalties</p>
+            </div>
+          </button>
+        </motion.section>
       </main>
 
-      <BottomNav variant="home" />
+      <BottomNav />
     </div>
   );
 };
