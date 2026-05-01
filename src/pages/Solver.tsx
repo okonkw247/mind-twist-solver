@@ -6,6 +6,7 @@ import {
   ChevronLeft, ChevronRight, Copy, Check
 } from 'lucide-react';
 import CubeRenderer3D from '@/components/CubeRenderer3D';
+import CubeControlPad from '@/components/CubeControlPad';
 import { useCubeContext } from '@/cube/CubeProvider';
 import BottomNav from '@/components/BottomNav';
 import StatCard from '@/components/StatCard';
