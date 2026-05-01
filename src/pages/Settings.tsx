@@ -12,12 +12,17 @@ import {
   Trash2, 
   LogOut,
   Info,
-  ChevronRight
+  ChevronRight,
+  Gauge,
+  RefreshCw,
 } from 'lucide-react';
 import BottomNav from '@/components/BottomNav';
+import { useCubeSettings, type AnimationSpeed } from '@/cube/CubeSettings';
+import { cn } from '@/lib/utils';
 
 const Settings = () => {
   const navigate = useNavigate();
+  const { animationSpeed, setAnimationSpeed, idleAutoRotate, setIdleAutoRotate } = useCubeSettings();
   const [soundFX, setSoundFX] = useState(true);
   const [music, setMusic] = useState(false);
   const [haptic, setHaptic] = useState(true);
