@@ -135,7 +135,7 @@ const Solver = () => {
           {isRunning ? <Pause className="w-6 h-6" /> : <Play className="w-6 h-6" />}
         </button>
         <h1 className="text-xl font-bold tracking-wider">3X3 SOLVER</h1>
-        <button onClick={() => navigate('/premium')} className="btn-icon" aria-label="Settings">
+        <button onClick={() => navigate('/settings')} className="btn-icon" aria-label="Settings">
           <Settings className="w-6 h-6" />
         </button>
       </header>
