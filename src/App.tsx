@@ -84,15 +84,30 @@ const AppContent = () => {
   );
 };
 
+// Bridges global CubeSettings → AnimationController so every screen honours
+// the user's preferred animation speed.
+const CubeSettingsBridge = ({ children }: { children: React.ReactNode }) => {
+  const { animationSpeed } = useCubeSettings();
+  const { setSpeed } = useCubeContext();
+  useEffect(() => {
+    setSpeed(animationSpeed);
+  }, [animationSpeed, setSpeed]);
+  return <>{children}</>;
+};
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
       <Toaster />
       <Sonner />
       <BrowserRouter>
-        <CubeProvider>
-          <AppContent />
-        </CubeProvider>
+        <CubeSettingsProvider>
+          <CubeProvider>
+            <CubeSettingsBridge>
+              <AppContent />
+            </CubeSettingsBridge>
+          </CubeProvider>
+        </CubeSettingsProvider>
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>
