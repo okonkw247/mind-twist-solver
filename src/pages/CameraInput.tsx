@@ -20,7 +20,9 @@ const COLOR_MAP: Record<ColorName, string> = {
 
 const CameraInput = () => {
   const navigate = useNavigate();
-  const camera = useCamera({ autoStart: true, facingMode: 'environment' });
+  // IMPORTANT: do NOT auto-start. getUserMedia must be called from a user gesture
+  // (the "Enable Camera" button) or browsers silently block the prompt/stream.
+  const camera = useCamera({ autoStart: false, facingMode: 'environment' });
 
   const [currentFace, setCurrentFace] = useState(0);
   const [faceColors, setFaceColors] = useState<ColorName[][]>(
@@ -113,6 +115,26 @@ const CameraInput = () => {
             {/* Camera state messages */}
             {camera.status !== 'ready' && currentColors.length === 0 && (
               <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 p-4 text-center">
+                {camera.status === 'idle' && (
+                  <>
+                    <Camera className="w-10 h-10 text-primary" />
+                    <p className="text-sm text-muted-foreground">
+                      Tap to enable your camera and start scanning.
+                    </p>
+                    <button
+                      onClick={() => void camera.start()}
+                      className="btn-secondary px-5 py-2 text-sm font-semibold"
+                    >
+                      Enable Camera
+                    </button>
+                    <button
+                      onClick={() => navigate('/manual-input')}
+                      className="text-xs text-muted-foreground underline"
+                    >
+                      or enter colors manually
+                    </button>
+                  </>
+                )}
                 {camera.status === 'requesting' && (
                   <>
                     <div className="w-10 h-10 border-4 border-primary/30 border-t-primary rounded-full animate-spin" />
@@ -123,8 +145,17 @@ const CameraInput = () => {
                   <>
                     <AlertTriangle className="w-8 h-8 text-destructive" />
                     <p className="text-sm">Camera permission denied</p>
-                    <button onClick={camera.start} className="btn-secondary px-4 py-2 text-sm">
+                    <p className="text-xs text-muted-foreground">
+                      Allow camera access in your browser settings, then retry.
+                    </p>
+                    <button onClick={() => void camera.start()} className="btn-secondary px-4 py-2 text-sm">
                       Retry
+                    </button>
+                    <button
+                      onClick={() => navigate('/manual-input')}
+                      className="text-xs text-muted-foreground underline"
+                    >
+                      Use manual input instead
                     </button>
                   </>
                 )}

@@ -1,7 +1,7 @@
 import { Suspense } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Settings as SettingsIcon, Camera, Puzzle, Timer as TimerIcon } from 'lucide-react';
+import { Settings as SettingsIcon, Camera, Puzzle, Timer as TimerIcon, Hand } from 'lucide-react';
 import CubeRenderer3D from '@/components/CubeRenderer3D';
 import BottomNav from '@/components/BottomNav';
 
@@ -64,6 +64,19 @@ const Home = () => {
             <div className="flex-1">
               <p className="font-semibold">Scan a cube</p>
               <p className="text-xs text-muted-foreground">Use your camera to capture all six faces</p>
+            </div>
+          </button>
+
+          <button
+            onClick={() => navigate('/manual-input')}
+            className="w-full flex items-center gap-3 p-4 rounded-xl bg-card border border-border hover:bg-secondary transition-colors text-left"
+          >
+            <div className="w-10 h-10 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
+              <Hand className="w-5 h-5" />
+            </div>
+            <div className="flex-1">
+              <p className="font-semibold">Enter colors manually</p>
+              <p className="text-xs text-muted-foreground">Tap each sticker face by face, then solve</p>
             </div>
           </button>
 

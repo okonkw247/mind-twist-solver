@@ -30,7 +30,7 @@ export interface UseCameraResult {
 }
 
 export function useCamera({
-  autoStart = true,
+  autoStart = false,
   facingMode = 'environment',
   width = 1280,
   height = 720,
