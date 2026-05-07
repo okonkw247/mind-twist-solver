@@ -1,7 +1,7 @@
 import { Suspense } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Settings as SettingsIcon, Camera, Puzzle, Timer as TimerIcon } from 'lucide-react';
+import { Settings as SettingsIcon, Camera, Puzzle, Timer as TimerIcon, Hand } from 'lucide-react';
 import CubeRenderer3D from '@/components/CubeRenderer3D';
 import BottomNav from '@/components/BottomNav';
 
