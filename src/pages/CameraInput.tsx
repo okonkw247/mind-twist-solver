@@ -20,7 +20,9 @@ const COLOR_MAP: Record<ColorName, string> = {
 
 const CameraInput = () => {
   const navigate = useNavigate();
-  const camera = useCamera({ autoStart: true, facingMode: 'environment' });
+  // IMPORTANT: do NOT auto-start. getUserMedia must be called from a user gesture
+  // (the "Enable Camera" button) or browsers silently block the prompt/stream.
+  const camera = useCamera({ autoStart: false, facingMode: 'environment' });
 
   const [currentFace, setCurrentFace] = useState(0);
   const [faceColors, setFaceColors] = useState<ColorName[][]>(
