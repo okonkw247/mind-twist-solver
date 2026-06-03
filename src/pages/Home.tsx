@@ -1,116 +1,97 @@
-import { Suspense } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Settings as SettingsIcon, Camera, Puzzle, Timer as TimerIcon, Hand } from 'lucide-react';
-import CubeRenderer3D from '@/components/CubeRenderer3D';
-import BottomNav from '@/components/BottomNav';
+import {
+  Camera,
+  Settings as SettingsIcon,
+  Timer as TimerIcon,
+  Box,
+  Grid3x3,
+  Puzzle,
+} from 'lucide-react';
+
+const tiles = [
+  { label: 'Manual Input', icon: Grid3x3, path: '/manual-input' },
+  { label: 'Camera Input', icon: Camera, path: '/camera' },
+  { label: 'Pattern Solver', icon: Puzzle, path: '/solver' },
+  { label: 'Virtual Cube', icon: Box, path: '/virtual-cube' },
+  { label: 'Cube Timer', icon: TimerIcon, path: '/timer' },
+  { label: 'Settings', icon: SettingsIcon, path: '/settings' },
+];
 
 const Home = () => {
   const navigate = useNavigate();
 
   return (
-    <div className="min-h-screen bg-background pb-24">
-      <header className="flex items-center justify-between px-4 py-4 safe-top max-w-xl mx-auto">
-        <div>
-          <h1 className="text-lg font-semibold tracking-tight">JSN Solver</h1>
-          <p className="text-xs text-muted-foreground">Real-time Rubik's cube workspace</p>
-        </div>
-        <button
-          onClick={() => navigate('/settings')}
-          className="btn-icon"
-          aria-label="Settings"
+    <div className="min-h-screen bg-background flex flex-col">
+      <header className="pt-10 pb-6 text-center">
+        <h1
+          className="text-6xl font-black tracking-tight"
+          style={{
+            color: 'hsl(140, 80%, 50%)',
+            textShadow: '0 4px 0 #000, 0 0 18px hsl(140 80% 50% / 0.45)',
+            WebkitTextStroke: '2px #000',
+          }}
         >
-          <SettingsIcon className="w-5 h-5" />
-        </button>
+          CubeX
+        </h1>
       </header>
 
-      <main className="px-4 max-w-xl mx-auto">
-        {/* 3D Cube hero */}
-        <motion.section
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="rounded-2xl bg-card border border-border p-6 mb-6"
-        >
-          <div className="flex justify-center py-2">
-            <Suspense
-              fallback={
-                <div className="w-56 h-56 flex items-center justify-center">
-                  <div className="w-10 h-10 border-2 border-muted border-t-primary rounded-full animate-spin" />
-                </div>
-              }
-            >
-              <CubeRenderer3D size={240} interactive={false} />
-            </Suspense>
+      <main className="flex-1 px-4 max-w-xl mx-auto w-full pb-12">
+        <div className="rounded-2xl bg-card border border-border overflow-hidden">
+          <div className="flex items-center gap-2 px-4 py-3 border-b border-border">
+            <Box className="w-4 h-4 text-muted-foreground" />
+            <span className="text-sm font-semibold text-muted-foreground">Solve</span>
           </div>
-          <p className="text-center text-sm text-muted-foreground mt-2">
-            Honors your speed &amp; idle-rotate preferences
-          </p>
-        </motion.section>
 
-        {/* Quick actions */}
-        <motion.section
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          className="grid gap-3"
-        >
-          <button
-            onClick={() => navigate('/camera')}
-            className="w-full flex items-center gap-3 p-4 rounded-xl bg-card border border-border hover:bg-secondary transition-colors text-left"
-          >
-            <div className="w-10 h-10 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
-              <Camera className="w-5 h-5" />
-            </div>
-            <div className="flex-1">
-              <p className="font-semibold">Scan a cube</p>
-              <p className="text-xs text-muted-foreground">Use your camera to capture all six faces</p>
-            </div>
-          </button>
+          <div className="grid grid-cols-2">
+            {tiles.slice(0, 2).map((t, i) => (
+              <Tile key={t.path} {...t} onClick={() => navigate(t.path)} index={i} divideRight={i === 0} />
+            ))}
+          </div>
+        </div>
 
-          <button
-            onClick={() => navigate('/manual-input')}
-            className="w-full flex items-center gap-3 p-4 rounded-xl bg-card border border-border hover:bg-secondary transition-colors text-left"
-          >
-            <div className="w-10 h-10 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
-              <Hand className="w-5 h-5" />
-            </div>
-            <div className="flex-1">
-              <p className="font-semibold">Enter colors manually</p>
-              <p className="text-xs text-muted-foreground">Tap each sticker face by face, then solve</p>
-            </div>
-          </button>
-
-          <button
-            onClick={() => navigate('/solver')}
-            className="w-full flex items-center gap-3 p-4 rounded-xl bg-card border border-border hover:bg-secondary transition-colors text-left"
-          >
-            <div className="w-10 h-10 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
-              <Puzzle className="w-5 h-5" />
-            </div>
-            <div className="flex-1">
-              <p className="font-semibold">Open solver</p>
-              <p className="text-xs text-muted-foreground">Shuffle, hint, and step through solutions</p>
-            </div>
-          </button>
-
-          <button
-            onClick={() => navigate('/timer')}
-            className="w-full flex items-center gap-3 p-4 rounded-xl bg-card border border-border hover:bg-secondary transition-colors text-left"
-          >
-            <div className="w-10 h-10 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
-              <TimerIcon className="w-5 h-5" />
-            </div>
-            <div className="flex-1">
-              <p className="font-semibold">WCA timer</p>
-              <p className="text-xs text-muted-foreground">15s inspection, +2 / DNF penalties</p>
-            </div>
-          </button>
-        </motion.section>
+        <div className="grid grid-cols-2 gap-3 mt-3">
+          {tiles.slice(2).map((t, i) => (
+            <button
+              key={t.path}
+              onClick={() => navigate(t.path)}
+              className="aspect-square rounded-2xl bg-card border border-border flex flex-col items-center justify-center gap-3 hover:bg-secondary/40 active:scale-[0.98] transition-all"
+            >
+              <t.icon className="w-12 h-12" strokeWidth={1.8} />
+              <span className="font-bold text-lg">{t.label}</span>
+            </button>
+          ))}
+        </div>
       </main>
-
-      <BottomNav />
     </div>
   );
 };
+
+const Tile = ({
+  label,
+  icon: Icon,
+  onClick,
+  index,
+  divideRight,
+}: {
+  label: string;
+  icon: React.ElementType;
+  onClick: () => void;
+  index: number;
+  divideRight?: boolean;
+}) => (
+  <motion.button
+    initial={{ opacity: 0, y: 8 }}
+    animate={{ opacity: 1, y: 0 }}
+    transition={{ delay: index * 0.04 }}
+    onClick={onClick}
+    className={`py-10 flex flex-col items-center justify-center gap-3 hover:bg-secondary/40 active:scale-[0.98] transition-all ${
+      divideRight ? 'border-r border-border' : ''
+    }`}
+  >
+    <Icon className="w-12 h-12" strokeWidth={1.8} />
+    <span className="font-bold text-lg">{label}</span>
+  </motion.button>
+);
 
 export default Home;
