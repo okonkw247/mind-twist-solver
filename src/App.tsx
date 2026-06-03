@@ -21,6 +21,7 @@ import Collection from "./pages/Collection";
 import LevelComplete from "./pages/LevelComplete";
 import Settings from "./pages/Settings";
 import Profile from "./pages/Profile";
+import VirtualCube from "./pages/VirtualCube";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -71,6 +72,7 @@ const AppContent = () => {
       <Route path="/play-cube" element={<PlayCube />} />
       <Route path="/compete" element={<PlayCube />} />
       <Route path="/solver" element={<Solver />} />
+      <Route path="/virtual-cube" element={<VirtualCube />} />
       <Route path="/collection" element={<Collection />} />
       <Route path="/level-complete" element={<LevelComplete />} />
       <Route path="/settings" element={<Settings />} />

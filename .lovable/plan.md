@@ -1,81 +1,123 @@
-# End-to-End Rebuild Plan
+# CubeX-style Rebuild Plan
 
-Fix the whole journey so it behaves like a real Rubik's Cube app: **Sign in → Home (3 input choices) → Input → Solve → Solution dashboard with full step controls**. Camera, manual input, 3D rotation, and solution playback all get repaired in one pass.
+Reshape the app so it looks and behaves like the reference screenshots: a clean 2-column home grid, a bold rotatable Virtual Cube, a real-time camera scanner with tips, an Advanced Solver results modal, a two-pad WCA timer, and a focused Settings page.
 
-## 1. Clean entry flow
+## 1. Home — 2x2 grid like CubeX
 
-Strip the messy routing so users land where they expect:
+Rewrite `/home` to match the reference:
 
-- **Splash → Sign in** (email + Google via Lovable Cloud, if not already wired we keep the existing local welcome).
-- **/home** = the only main hub. Three big cards:
-  1. **Manual input** → `/manual-input`
-  2. **Camera scan** → `/camera`
-  3. **Open solver / playground** → `/solver`
-- Remove leftover gamification entry points (Collection, Premium, Levels, PlayCube) from the home and bottom nav. Keep their files so nothing breaks, just hide them.
-- Bottom nav: Home · Scan · Solver · Timer · Settings.
+- Big bold "CubeX" (or current brand) wordmark at top.
+- Section label "Solve" with a small cube icon.
+- 6 tiles in a 2-column grid, each a large dark card with white icon + label:
+  1. **Manual Input** → `/manual-input`
+  2. **Camera Input** → `/camera`
+  3. **Pattern Solver** → `/solver` (advanced solver UI)
+  4. **Virtual Cube** → `/virtual-cube` (new route, hand-rotatable)
+  5. **Cube Timer** → `/timer`
+  6. **Settings** → `/settings`
+- Remove gamification cards/banners. Hide bottom nav on Home (tiles replace it) or keep a minimal Home/Back bar.
 
-## 2. Manual input rebuild (tabs per face)
+## 2. Virtual Cube — bold, hand-rotatable
 
-Rewrite `/manual-input` with a simple, reliable flow:
+New route `/virtual-cube` (or replace `/solver` body) matching screenshot 2:
 
-- Tabs across the top: **U · R · F · D · L · B** (with center color shown so users know which face).
-- Below tabs: a 3x3 grid for the active face. Tap a sticker → it cycles through the 6 colors (or pick from a color palette below the grid).
-- Center sticker is locked to that face's color (prevents invalid states).
-- Live mini "unfolded net" preview at the bottom showing all 6 faces so users see progress.
-- **Solve** button is disabled until all 54 stickers are filled. On click → validate (each color exactly 9 times, centers unique) → navigate to `/solution` with the cube state.
+- Header: back chevron · centered "Virtual Cube" · 3-dot menu.
+- Large black canvas takes ~70% of screen, cube centered with subtle radial vignette.
+- **Hand/touch rotation**: drag anywhere on the canvas to orbit the whole cube (OrbitControls, damped). Two-finger pinch zooms. No face turns from drag — that stays on the control pad / keyboard.
+- Below canvas: a faint Play ▶ icon, big 00 : 00 : 00 display, and a square Stop icon (mini timer strip).
+- Bottom row of 3 outlined buttons: **Scramble · Solve · Reset**.
+  - Scramble: 20–25 random legal moves animated through the queue.
+  - Solve: opens the Advanced Solver modal (section 4).
+  - Reset: snaps cube back to solved.
 
-## 3. Camera fix (live video + per-sticker color preview)
+## 3. Camera Input — real-time scan with Tips overlay
 
-The camera popup currently shows but no video appears. Fixes:
+Rewrite `/camera` to match screenshot 1:
 
-- Call `getUserMedia` **directly inside the user's tap handler** (not inside an auto-start effect) — browsers block the stream when it's chained off mounting.
-- Show an explicit **"Enable Camera"** button first; tap → request permission → attach stream to `<video>`.
-- Once live, overlay the 3x3 grid and run the color classifier every ~400ms on just the 9 sticker centers, painting a small swatch row under the video so users see what colors will be captured **before** they hit capture.
-- Capture button writes the 9 classified colors into the current face, advances to the next face.
-- After all 6 faces: stop tracks, navigate to `/solution` with the assembled state (already wired, just confirm the F/R/U/D/L/B → up/right/front/down/left/back mapping).
-- Fallbacks for denied/unsupported with a clear "Use manual input instead" link.
+- Back chevron · 3-dot menu, transparent over the live video.
+- Full-screen `<video>` (auto-plays after the user taps Enable Camera once) with a centered white 3x3 grid overlay sized to a square in the upper half.
+- Bottom strip: row of 3 (or 6) color swatches showing the colors currently detected at the 9 sticker centers, updated ~5×/sec from `classifyFace`.
+- Bottom: a big **SCAN** button. Tap captures current 9 colors into the active face, advances to the next face, and shows a small "U/R/F/D/L/B" pill.
+- First open shows a **Tips 1/3** bottom-sheet card with the reference photo and "Focus your cube inside the grid and press Scan" — Next cycles through 3 tips, last tip's button says "Got it" and dismisses. Persist dismissal in localStorage.
+- After all 6 faces captured: stop tracks, navigate to `/solution` (or open Advanced Solver modal on the Virtual Cube screen) with the assembled state.
+- Permission flow stays gesture-gated (already fixed): show "Enable Camera" if `status==='idle'`, "Retry" if denied, and a fallback link to Manual Input.
 
-## 4. 3D cube rotation rebuild
+## 4. Advanced Solver modal
 
-The current cube glitches and mixes colors because the rotating group and the cubie state get out of sync. Rebuild around one strict contract:
+When the user taps **Solve** on the Virtual Cube (or finishes Camera/Manual), open a centered modal matching screenshot 3:
 
-- **Single source of truth**: a 3x3x3 array of cubie objects, each with a position vector and an orientation quaternion. Stickers are children of cubies.
-- **executeMove(face, dir)** is the only function allowed to change cube state. It:
-  1. Selects the 9 cubies on that face by position.
-  2. Re-parents them under a temporary `THREE.Group`.
-  3. Animates the group's rotation 0 → ±90° around the face axis (duration based on global speed setting).
-  4. On animation end: bakes the rotation into each cubie's position+quaternion (snapped to the nearest 90°), re-parents back to the scene root, deletes the group.
-- A small move queue prevents overlapping animations (queue the next move, don't fire mid-rotation). This kills the color-mixing glitch.
-- Real-cube look: matte black body, WCA sticker palette, inset stickers with visible black gaps.
-- Inputs (already partly there) get cleaned: keyboard (R U L D F B + Shift for prime), on-screen N/E/W/S/+ pad, swipe gestures. All three go through `executeMove` only.
+- Title row: small cube icon + "Advanced Solver" + close ✕.
+- Status row: spinner + "Solver Running.." while Kociemba runs (also shown briefly when results stream in).
+- List of solution options, each a row: **"N Moves"** on the left, eye 👁 icon on the right.
+  - Run Kociemba twice (e.g. depth limits 20, 22, 24) or take the best solution and also show its length minus 1/2 by running additional passes; show up to 3 results. If only one is returned, only show that row.
+  - Tapping a row (or its eye) closes the modal and seeds the Virtual Cube's move queue with that sequence, then auto-plays through the existing SolveAnimationControls.
+- On invalid scan: replace list with an "Edit colors" CTA that opens `/manual-input` prefilled with the scanned state.
 
-## 5. Solution dashboard with full controls
+## 5. Cube Timer — two-pad WCA timer
 
-Rebuild `/solution` as the "watch it solve" screen:
+Rewrite `/timer` to match screenshot 4 (mobile layout, stacked instead of side-by-side):
 
-- Top: 3D cube seeded with the user's scrambled state.
-- Below cube: the move list (Singmaster) with the current move highlighted and a progress bar.
-- Control bar (the "full control" you asked for):
-  - **Prev** · **Play / Pause** · **Next** · **Reset**
-  - Speed presets: **Slow · Normal · Fast** (saved to global settings, persisted in localStorage).
-  - Optional fine-grain speed slider above the presets.
-- Play applies moves through the same `executeMove` queue with a delay between each move tied to the speed preset. Pause stops at the current move. Prev replays the inverse of the last move. Reset re-seeds the scrambled state and rewinds the move pointer to 0.
-- If Kociemba returns an error (invalid centers, parity), show a friendly card: "We couldn't read this cube. Edit colors" → opens manual input prefilled with the scanned state.
+- Two large round pads (left and right) the user must hold simultaneously.
+  - On mobile: stack pads top/bottom or place left/right within a single row that fits 360px (smaller circles).
+- "Place hands on pads" label above the time display.
+- 7-segment style **00 : 00 : 00** in the middle.
+- Below: three small stat cells **Ao5 · Avg · Ao12** with the current values (— when empty), stored in localStorage.
+- Bottom dark bar with 4 actions: ◀ **Back** · 📦 **Generate Scramble** · ⏱ **Records** · ❓ **Help**.
+  - Generate Scramble pushes a scramble string into a small card above the timer.
+  - Records opens a bottom-sheet list of past solves (localStorage).
+  - Help opens a short rules sheet (15s inspection, hold both pads to start).
+- Logic: both pads pressed for 0.5s → green ready → release both → timer starts; any tap → timer stops; +2/DNF buttons appear in the result card. Reuse `useWCATimer`.
 
-## 6. Settings + global speed
+## 6. Settings — focused list
 
-- `/settings` exposes: animation speed (slow/normal/fast), idle auto-rotate on/off, theme, sign out.
-- Already persisted via `CubeSettingsContext` → just make sure Solution and Solver both read from it.
+Rewrite `/settings`:
+
+- Header "Settings".
+- Grouped list:
+  - **Animation speed** — segmented control Slow · Normal · Fast (writes `CubeSettings.animationSpeed`).
+  - **Idle auto-rotate** — toggle (writes `CubeSettings.idleAutoRotate`).
+  - **Theme** — Dark / System (already exists if any; otherwise just Dark).
+  - **Reset records** — clears timer history.
+  - **About** — version, GitHub link.
+- All values persist via existing `CubeSettingsProvider` (localStorage `jsn_cube_settings`).
+
+## 7. Cube engine guarantees (already in place — verify)
+
+- All face turns go through `executeMove`/move queue → no color mixing.
+- Drag on Virtual Cube only orbits the camera, never triggers a face turn.
+- Speed presets read from `useCubeSettings()` in Virtual Cube, Solution playback, and Solver.
 
 ## Technical notes
 
-- Files touched (rewrites): `src/pages/Home.tsx`, `src/pages/ManualInput.tsx`, `src/pages/CameraInput.tsx`, `src/pages/Solution.tsx`, `src/components/CubeRenderer3D.tsx`, `src/components/BottomNav.tsx`, `src/cube/CubeProvider.tsx` (move queue), `src/hooks/useCamera.ts` (gesture-gated start).
-- Files added: `src/components/SolutionPlaybackBar.tsx`, `src/components/ManualFaceEditor.tsx`, `src/components/CubeNetPreview.tsx`, `src/components/LiveColorReadout.tsx`.
-- Existing solver (`kociembaSolver`, `CubeModel.fromFaceArrays`) stays — only the wiring around it changes.
-- Tests: extend `CubeModel.test` and `AnimationController.test` to cover the new move queue (no overlapping rotations, state matches mesh after every move).
+- **Files rewritten**: `src/pages/Home.tsx`, `src/pages/CameraInput.tsx`, `src/pages/Solver.tsx` (or new `src/pages/VirtualCube.tsx` + route), `src/pages/Timer.tsx`, `src/pages/Settings.tsx`, `src/components/CubeRenderer3D.tsx` (ensure OrbitControls enabled, pad-only face turns).
+- **Files added**: `src/components/AdvancedSolverModal.tsx`, `src/components/CameraTipsSheet.tsx`, `src/components/LiveSwatchStrip.tsx`, `src/components/TimerPads.tsx`, `src/pages/VirtualCube.tsx`.
+- **Routes**: add `/virtual-cube` in `src/App.tsx`; keep `/solver`, `/solution`, `/manual-input`, `/camera`, `/timer`, `/settings`.
+- **Solver**: reuse `kociembaSolver`; wrap in a helper that returns up to 3 solutions (different max-depth params) for the Advanced Solver modal.
+- **Color readout**: throttle `classifyFace` to 200ms in `CameraInput` and pass results to `LiveSwatchStrip`.
+- **Bottom nav**: hide on Home, Camera, Virtual Cube (full-screen feel); keep on Timer/Settings if useful, otherwise remove entirely since Home is the hub.
 
-## Out of scope (this round)
+## Out of scope
 
-- Auth provider changes (we keep current sign-in).
-- Premium/payments, Collection, Play levels, gamification — left in code but hidden.
-- 4x4+ puzzles — 3x3 only for this fix.
+- Auth, payments, gamification (Collection, Premium, Levels, PlayCube) — left as dormant files.
+- 4x4+ puzzles.
+- Real ad slot — the reference's ad banners are not reproduced.
+
+## ASCII home layout
+
+```text
++-------------------------+
+|        CubeX            |
+|                         |
+|  [#] Solve              |
+|  +---------+---------+  |
+|  | Manual  | Camera  |  |
+|  | Input   | Input   |  |
+|  +---------+---------+  |
+|  | Pattern | Virtual |  |
+|  | Solver  | Cube    |  |
+|  +---------+---------+  |
+|  | Cube    | Settings|  |
+|  | Timer   |         |  |
+|  +---------+---------+  |
++-------------------------+
+```
