@@ -5,7 +5,7 @@
  * Always release tracks on unmount to prevent the browser camera light staying on.
  */
 
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 
 export type CameraStatus = 'idle' | 'requesting' | 'ready' | 'denied' | 'unavailable' | 'error';
 
@@ -130,5 +130,5 @@ export function useCamera({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  return { videoRef, status, error, start, stop, capture };
+  return useMemo(() => ({ videoRef, status, error, start, stop, capture }), [status, error, start, stop, capture]);
 }

@@ -64,7 +64,6 @@ const CameraInput = () => {
     }
   }, [camera, currentFace]);
 
-  useEffect(() => () => camera.stop(), [camera]);
 
   const goSolve = () => {
     if (completedFaces !== 6) return;
@@ -82,6 +81,7 @@ const CameraInput = () => {
       <video
         ref={camera.videoRef}
         playsInline
+        autoPlay
         muted
         className={`absolute inset-0 w-full h-full object-cover transition-opacity ${
           camera.status === 'ready' ? 'opacity-100' : 'opacity-0'
