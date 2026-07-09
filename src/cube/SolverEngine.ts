@@ -33,7 +33,7 @@ export interface ValidationResult {
 }
 
 export interface SolveResult {
-  success: boolean;
+  success: true;
   algorithm: string;   // e.g. "R U R' U'"
   moves: string[];     // e.g. ["R", "U", "R'", "U'"]
   moveCount: number;

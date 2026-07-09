@@ -149,7 +149,6 @@ export async function solveCubeKociemba(cubeState: Record<string, string[]>): Pr
     return {
       success: false,
       error: 'Failed to solve cube - please verify your input',
-      validationResult,
     };
   }
 }
