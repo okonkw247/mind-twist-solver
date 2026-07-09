@@ -404,11 +404,11 @@ export class CubeModel {
       }
       if (x === 1) {
         const color = this.getVisibleColor(cubie, 'R');
-        if (color) faces.right[(1 - y) * 3 + (z + 1)] = color;
+        if (color) faces.right[(1 - y) * 3 + (1 - z)] = color;
       }
       if (x === -1) {
         const color = this.getVisibleColor(cubie, 'L');
-        if (color) faces.left[(1 - y) * 3 + (1 - z)] = color;
+        if (color) faces.left[(1 - y) * 3 + (z + 1)] = color;
       }
       if (z === 1) {
         const color = this.getVisibleColor(cubie, 'F');
