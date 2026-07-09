@@ -132,7 +132,7 @@ export async function solveCubeKociemba(cubeState: Record<string, string[]>): Pr
     await initSolver();
     const result = solveFromColorArrays(cubeState);
 
-    if (!result.success) {
+    if ('error' in result) {
       return {
         success: false,
         error: result.error,
