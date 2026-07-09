@@ -1,8 +1,11 @@
 // Kociemba Two-Phase Algorithm Implementation
-// This wraps the cubejs library with proper validation
+// Compatibility wrapper around the canonical SolverEngine.
 
-import Cube from 'cubejs';
-import { validateCubeSolvability, ValidationResult } from './cubeValidator';
+import {
+  initSolver,
+  solveFromColorArrays,
+  type ValidationResult,
+} from '@/cube/SolverEngine';
 
 export interface SolveResult {
   success: boolean;
@@ -74,20 +77,6 @@ const colorToFace: Record<string, string> = {
   orange: 'L',
 };
 
-// Initialize cubejs solver tables
-let solverInitialized = false;
-
-async function initSolver(): Promise<void> {
-  if (solverInitialized) return;
-  
-  return new Promise((resolve) => {
-    // Initialize the solver (generates lookup tables)
-    Cube.initSolver();
-    solverInitialized = true;
-    resolve();
-  });
-}
-
 // Convert our cube state to Kociemba notation string
 export function cubeStateToKociembaString(cubeState: Record<string, string[]>): string {
   // Kociemba order: U R F D L B (9 stickers each = 54 total)
@@ -139,53 +128,27 @@ export function parseSolution(solutionString: string): CubeMove[] {
 
 // Main solve function with validation
 export async function solveCubeKociemba(cubeState: Record<string, string[]>): Promise<SolveResult> {
-  // Step 1: Validate cube state
-  const validationResult = validateCubeSolvability(cubeState);
-  
-  if (!validationResult.valid) {
-    const errorMessages = validationResult.errors.map(e => e.message).join('; ');
-    return {
-      success: false,
-      error: errorMessages,
-      validationResult,
-    };
-  }
-  
   try {
-    // Step 2: Initialize solver
     await initSolver();
-    
-    // Step 3: Convert state to Kociemba string
-    const stateString = cubeStateToKociembaString(cubeState);
-    
-    // Step 4: Create cube and solve
-    const cube = Cube.fromString(stateString);
-    const solution = cube.solve();
-    
-    if (!solution || solution === '') {
+    const result = solveFromColorArrays(cubeState);
+
+    if ('error' in result) {
       return {
         success: false,
-        error: 'No solution found - cube may be in an impossible state',
-        validationResult,
+        error: result.error,
       };
     }
-    
-    // Step 5: Parse solution
-    const moves = parseSolution(solution);
-    
+
     return {
       success: true,
-      solution: moves.map(m => m.notation),
-      moveCount: moves.length,
-      validationResult,
+      solution: result.moves,
+      moveCount: result.moveCount,
     };
-    
   } catch (error) {
     console.error('Solver error:', error);
     return {
       success: false,
       error: 'Failed to solve cube - please verify your input',
-      validationResult,
     };
   }
 }

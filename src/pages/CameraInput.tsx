@@ -64,7 +64,6 @@ const CameraInput = () => {
     }
   }, [camera, currentFace]);
 
-  useEffect(() => () => camera.stop(), [camera]);
 
   const goSolve = () => {
     if (completedFaces !== 6) return;
@@ -82,9 +81,10 @@ const CameraInput = () => {
       <video
         ref={camera.videoRef}
         playsInline
+        autoPlay
         muted
         className={`absolute inset-0 w-full h-full object-cover transition-opacity ${
-          camera.status === 'ready' ? 'opacity-100' : 'opacity-0'
+          camera.status === 'ready' || camera.hasStream ? 'opacity-100' : 'opacity-0'
         }`}
       />
       <div className="absolute inset-0 bg-black/30 pointer-events-none" />
@@ -232,7 +232,10 @@ const CameraInput = () => {
         </p>
       </div>
 
-      <CameraTipsSheet open={tipsOpen} onClose={() => setTipsOpen(false)} />
+      <CameraTipsSheet
+        open={tipsOpen && camera.status !== 'ready'}
+        onClose={() => setTipsOpen(false)}
+      />
     </div>
   );
 };

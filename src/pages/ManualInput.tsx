@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ArrowLeft, ChevronLeft, ChevronRight, Check, Camera, Video } from 'lucide-react';
+import { ArrowLeft, Check, Camera, Video } from 'lucide-react';
 import { useCubeState } from '@/hooks/useCubeState';
 import { getSolutionMoves } from '@/lib/kociembaSolver';
 import { useToast } from '@/hooks/use-toast';
@@ -27,8 +27,6 @@ const ManualInput = () => {
     currentFaceLabel,
     currentFaceColors,
     setStickerOnCurrentFace,
-    nextFace,
-    prevFace,
     goToFace,
     filledCount,
     totalCount,
@@ -140,6 +138,34 @@ const ManualInput = () => {
           </div>
         </div>
 
+        {/* Face tabs */}
+        <div className="mb-4">
+          <div className="grid grid-cols-6 gap-2" role="tablist" aria-label="Cube faces">
+            {faceOrder.map((face, index) => {
+              const complete = isFaceComplete(face);
+              const active = index === currentFaceIndex;
+              return (
+                <button
+                  key={face}
+                  type="button"
+                  role="tab"
+                  aria-selected={active}
+                  onClick={() => goToFace(index)}
+                  className={`h-11 rounded-lg border text-xs font-bold uppercase transition-all ${
+                    active
+                      ? 'border-primary bg-primary text-primary-foreground'
+                      : complete
+                        ? 'border-primary/50 bg-primary/15 text-primary'
+                        : 'border-border bg-secondary/45 text-muted-foreground'
+                  }`}
+                >
+                  {face[0]}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
         {/* Current Face Label */}
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold uppercase tracking-wide">{currentFaceLabel}</h2>
@@ -207,7 +233,7 @@ const ManualInput = () => {
 
         {/* Instructions */}
         <p className="text-center text-muted-foreground text-sm mb-6">
-          Tap a square to cycle colors or select from the palette below
+          Choose a color, then tap stickers on the current face
         </p>
 
         {/* Color Palette */}
@@ -236,26 +262,13 @@ const ManualInput = () => {
           })}
         </div>
 
-        {/* Navigation Buttons */}
-        <div className="flex gap-3 mb-4">
-          <button
-            onClick={prevFace}
-            disabled={currentFaceIndex === 0}
-            className="btn-secondary flex-1 flex items-center justify-center gap-2 h-14 disabled:opacity-50"
-          >
-            <ChevronLeft className="w-5 h-5" />
-            Back Face
-          </button>
-          
-          <button
-            onClick={nextFace}
-            disabled={currentFaceIndex === 5}
-            className="btn-primary flex-1 flex items-center justify-center gap-2 h-14 disabled:opacity-50"
-          >
-            Right Face
-            <ChevronRight className="w-5 h-5" />
-          </button>
-        </div>
+        <button
+          onClick={handleSolve}
+          disabled={!isCubeComplete || isSolving}
+          className="btn-primary w-full h-14 flex items-center justify-center gap-2 mb-4 disabled:opacity-45"
+        >
+          {isSolving ? 'Solving…' : `Solve cube (${filledCount}/${totalCount})`}
+        </button>
 
         {/* Switch to Camera */}
         <button
