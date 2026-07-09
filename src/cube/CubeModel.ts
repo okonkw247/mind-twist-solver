@@ -335,6 +335,11 @@ export class CubeModel {
     this._moveHistory = [];
   }
 
+  /** Clear history without changing the physical cube state. */
+  clearMoveHistory(): void {
+    this._moveHistory = [];
+  }
+
   // ── State queries ────────────────────────────────────────────────────────
 
   /**

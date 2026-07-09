@@ -144,7 +144,7 @@ const CubeSceneInner = ({ cubies, animFrame, interactive, autoRotateIdle }: Scen
       else stat.push(c);
     }
     return { staticCubies: stat, rotatingCubies: rot };
-  }, [cubies, animFrame?.face, animFrame?.layerValue]);
+  }, [cubies, animFrame]);
 
   return (
     <>
