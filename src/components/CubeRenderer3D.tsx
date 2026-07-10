@@ -285,6 +285,7 @@ const CubeRenderer3D = forwardRef<HTMLDivElement, CubeRenderer3DProps>(
             animFrame={animFrame}
             interactive={interactive}
             autoRotateIdle={idle}
+            gestureMode={gestureMode}
           />
         </Canvas>
       </div>
