@@ -232,28 +232,31 @@ const CubeRenderer3D = forwardRef<HTMLDivElement, CubeRenderer3DProps>(
     }, [inputsOn, enqueue]);
 
     // ── Touch / pointer swipe → face turn ───────────────────────────────────
-    const swipeStart = useRef<{ x: number; y: number } | null>(null);
+    const swipeStart = useRef<{ x: number; y: number; id: number } | null>(null);
+    const activePointers = useRef<Set<number>>(new Set());
     const onPointerDown = useCallback((e: React.PointerEvent) => {
-      // Ignore right-clicks / secondary buttons
+      activePointers.current.add(e.pointerId);
+      // Second finger → cancel any in-flight swipe so OrbitControls owns the gesture
+      if (activePointers.current.size > 1) {
+        swipeStart.current = null;
+        return;
+      }
       if (e.button !== 0) return;
-      swipeStart.current = { x: e.clientX, y: e.clientY };
+      swipeStart.current = { x: e.clientX, y: e.clientY, id: e.pointerId };
     }, []);
     const onPointerUp = useCallback(
       (e: React.PointerEvent) => {
+        activePointers.current.delete(e.pointerId);
         const start = swipeStart.current;
+        if (start && start.id !== e.pointerId) return;
         swipeStart.current = null;
         if (!start || !inputsOn) return;
         const dx = e.clientX - start.x;
         const dy = e.clientY - start.y;
         const ax = Math.abs(dx);
         const ay = Math.abs(dy);
-        const THRESHOLD = 32;
-        if (Math.max(ax, ay) < THRESHOLD) return; // treat as tap, let OrbitControls handle
-        // Map cardinal swipe to face turns:
-        //   right   → U
-        //   left    → U'
-        //   up      → R
-        //   down    → R'
+        const THRESHOLD = 28;
+        if (Math.max(ax, ay) < THRESHOLD) return; // treat as tap
         let move: string;
         if (ax > ay) move = dx > 0 ? 'U' : "U'";
         else move = dy < 0 ? 'R' : "R'";
@@ -261,6 +264,10 @@ const CubeRenderer3D = forwardRef<HTMLDivElement, CubeRenderer3DProps>(
       },
       [inputsOn, enqueue],
     );
+    const onPointerCancel = useCallback((e: React.PointerEvent) => {
+      activePointers.current.delete(e.pointerId);
+      swipeStart.current = null;
+    }, []);
 
     return (
       <div
