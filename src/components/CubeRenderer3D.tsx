@@ -275,6 +275,7 @@ const CubeRenderer3D = forwardRef<HTMLDivElement, CubeRenderer3DProps>(
         style={{ width: size, height: size }}
         onPointerDown={inputsOn ? onPointerDown : undefined}
         onPointerUp={inputsOn ? onPointerUp : undefined}
+        onPointerCancel={inputsOn ? onPointerCancel : undefined}
         className={
           interactive
             ? 'cursor-grab active:cursor-grabbing touch-none select-none'
