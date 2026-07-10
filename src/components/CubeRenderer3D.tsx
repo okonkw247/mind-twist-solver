@@ -111,14 +111,17 @@ function isInAnimLayer(pos: Vec3, axis: string, layerValue: number): boolean {
   return Math.round(pos[FACE_LAYER_INDEX[axis]]) === layerValue;
 }
 
+type GestureMode = 'hybrid' | 'turn-primary';
+
 interface SceneProps {
   cubies: readonly Cubie[];
   animFrame: AnimationFrame | null;
   interactive: boolean;
   autoRotateIdle: boolean;
+  gestureMode: GestureMode;
 }
 
-const CubeSceneInner = ({ cubies, animFrame, interactive, autoRotateIdle }: SceneProps) => {
+const CubeSceneInner = ({ cubies, animFrame, interactive, autoRotateIdle, gestureMode }: SceneProps) => {
   const cubeRootRef = useRef<THREE.Group>(null);
   const rotatingGroupRef = useRef<THREE.Group>(null);
 
@@ -146,6 +149,16 @@ const CubeSceneInner = ({ cubies, animFrame, interactive, autoRotateIdle }: Scen
     return { staticCubies: stat, rotatingCubies: rot };
   }, [cubies, animFrame]);
 
+  // In turn-primary mode, single-finger / left-mouse is reserved for face
+  // turns (handled at the DOM level). OrbitControls gets two-finger rotate
+  // and right-mouse rotate so the user can still orbit the camera.
+  const touches = gestureMode === 'turn-primary'
+    ? { ONE: undefined as unknown as THREE.TOUCH, TWO: THREE.TOUCH.ROTATE }
+    : { ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN };
+  const mouseButtons = gestureMode === 'turn-primary'
+    ? { LEFT: undefined as unknown as THREE.MOUSE, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.ROTATE }
+    : undefined;
+
   return (
     <>
       <ambientLight intensity={0.6} />
@@ -170,7 +183,8 @@ const CubeSceneInner = ({ cubies, animFrame, interactive, autoRotateIdle }: Scen
           dampingFactor={0.1}
           rotateSpeed={0.8}
           enableDamping={true}
-          touches={{ ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN }}
+          touches={touches}
+          mouseButtons={mouseButtons}
         />
       )}
     </>
@@ -180,17 +194,22 @@ const CubeSceneInner = ({ cubies, animFrame, interactive, autoRotateIdle }: Scen
 // ── Public component ─────────────────────────────────────────────────────────
 
 interface CubeRenderer3DProps {
-  size?: number;
+  size?: number | string;
   /** Allow user to orbit/zoom the camera. Default: true. */
   interactive?: boolean;
   /** Override global CubeSettings.idleAutoRotate. */
   autoRotateIdle?: boolean;
   /** Enable swipe gestures and keyboard input to drive face turns. Default = interactive. */
   enableInputs?: boolean;
+  /**
+   * 'hybrid'        — 1-finger/left-drag orbits camera, swipe fires face turn (default).
+   * 'turn-primary'  — 1-finger/left-drag = face turn, 2-finger/right-drag = orbit camera.
+   */
+  gestureMode?: GestureMode;
 }
 
 const CubeRenderer3D = forwardRef<HTMLDivElement, CubeRenderer3DProps>(
-  ({ size = 260, interactive = true, autoRotateIdle, enableInputs }, ref) => {
+  ({ size = 260, interactive = true, autoRotateIdle, enableInputs, gestureMode = 'hybrid' }, ref) => {
     const { cubies, animFrame, enqueue } = useCubeContext();
     const { idleAutoRotate } = useCubeSettings();
 
@@ -213,28 +232,31 @@ const CubeRenderer3D = forwardRef<HTMLDivElement, CubeRenderer3DProps>(
     }, [inputsOn, enqueue]);
 
     // ── Touch / pointer swipe → face turn ───────────────────────────────────
-    const swipeStart = useRef<{ x: number; y: number } | null>(null);
+    const swipeStart = useRef<{ x: number; y: number; id: number } | null>(null);
+    const activePointers = useRef<Set<number>>(new Set());
     const onPointerDown = useCallback((e: React.PointerEvent) => {
-      // Ignore right-clicks / secondary buttons
+      activePointers.current.add(e.pointerId);
+      // Second finger → cancel any in-flight swipe so OrbitControls owns the gesture
+      if (activePointers.current.size > 1) {
+        swipeStart.current = null;
+        return;
+      }
       if (e.button !== 0) return;
-      swipeStart.current = { x: e.clientX, y: e.clientY };
+      swipeStart.current = { x: e.clientX, y: e.clientY, id: e.pointerId };
     }, []);
     const onPointerUp = useCallback(
       (e: React.PointerEvent) => {
+        activePointers.current.delete(e.pointerId);
         const start = swipeStart.current;
+        if (start && start.id !== e.pointerId) return;
         swipeStart.current = null;
         if (!start || !inputsOn) return;
         const dx = e.clientX - start.x;
         const dy = e.clientY - start.y;
         const ax = Math.abs(dx);
         const ay = Math.abs(dy);
-        const THRESHOLD = 32;
-        if (Math.max(ax, ay) < THRESHOLD) return; // treat as tap, let OrbitControls handle
-        // Map cardinal swipe to face turns:
-        //   right   → U
-        //   left    → U'
-        //   up      → R
-        //   down    → R'
+        const THRESHOLD = 28;
+        if (Math.max(ax, ay) < THRESHOLD) return; // treat as tap
         let move: string;
         if (ax > ay) move = dx > 0 ? 'U' : "U'";
         else move = dy < 0 ? 'R' : "R'";
@@ -242,6 +264,10 @@ const CubeRenderer3D = forwardRef<HTMLDivElement, CubeRenderer3DProps>(
       },
       [inputsOn, enqueue],
     );
+    const onPointerCancel = useCallback((e: React.PointerEvent) => {
+      activePointers.current.delete(e.pointerId);
+      swipeStart.current = null;
+    }, []);
 
     return (
       <div
@@ -249,6 +275,7 @@ const CubeRenderer3D = forwardRef<HTMLDivElement, CubeRenderer3DProps>(
         style={{ width: size, height: size }}
         onPointerDown={inputsOn ? onPointerDown : undefined}
         onPointerUp={inputsOn ? onPointerUp : undefined}
+        onPointerCancel={inputsOn ? onPointerCancel : undefined}
         className={
           interactive
             ? 'cursor-grab active:cursor-grabbing touch-none select-none'
@@ -266,6 +293,7 @@ const CubeRenderer3D = forwardRef<HTMLDivElement, CubeRenderer3DProps>(
             animFrame={animFrame}
             interactive={interactive}
             autoRotateIdle={idle}
+            gestureMode={gestureMode}
           />
         </Canvas>
       </div>
