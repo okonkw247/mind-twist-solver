@@ -194,17 +194,22 @@ const CubeSceneInner = ({ cubies, animFrame, interactive, autoRotateIdle, gestur
 // ── Public component ─────────────────────────────────────────────────────────
 
 interface CubeRenderer3DProps {
-  size?: number;
+  size?: number | string;
   /** Allow user to orbit/zoom the camera. Default: true. */
   interactive?: boolean;
   /** Override global CubeSettings.idleAutoRotate. */
   autoRotateIdle?: boolean;
   /** Enable swipe gestures and keyboard input to drive face turns. Default = interactive. */
   enableInputs?: boolean;
+  /**
+   * 'hybrid'        — 1-finger/left-drag orbits camera, swipe fires face turn (default).
+   * 'turn-primary'  — 1-finger/left-drag = face turn, 2-finger/right-drag = orbit camera.
+   */
+  gestureMode?: GestureMode;
 }
 
 const CubeRenderer3D = forwardRef<HTMLDivElement, CubeRenderer3DProps>(
-  ({ size = 260, interactive = true, autoRotateIdle, enableInputs }, ref) => {
+  ({ size = 260, interactive = true, autoRotateIdle, enableInputs, gestureMode = 'hybrid' }, ref) => {
     const { cubies, animFrame, enqueue } = useCubeContext();
     const { idleAutoRotate } = useCubeSettings();
 
