@@ -16,7 +16,7 @@
  *     explicitly passed.
  */
 
-import { useRef, useMemo, memo, forwardRef, useEffect, useCallback } from 'react';
+import { useRef, useMemo, memo, forwardRef, useEffect, useCallback, useState } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { OrbitControls, RoundedBox } from '@react-three/drei';
 import * as THREE from 'three';
