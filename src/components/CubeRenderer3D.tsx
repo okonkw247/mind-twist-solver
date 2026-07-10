@@ -111,14 +111,17 @@ function isInAnimLayer(pos: Vec3, axis: string, layerValue: number): boolean {
   return Math.round(pos[FACE_LAYER_INDEX[axis]]) === layerValue;
 }
 
+type GestureMode = 'hybrid' | 'turn-primary';
+
 interface SceneProps {
   cubies: readonly Cubie[];
   animFrame: AnimationFrame | null;
   interactive: boolean;
   autoRotateIdle: boolean;
+  gestureMode: GestureMode;
 }
 
-const CubeSceneInner = ({ cubies, animFrame, interactive, autoRotateIdle }: SceneProps) => {
+const CubeSceneInner = ({ cubies, animFrame, interactive, autoRotateIdle, gestureMode }: SceneProps) => {
   const cubeRootRef = useRef<THREE.Group>(null);
   const rotatingGroupRef = useRef<THREE.Group>(null);
 
@@ -146,6 +149,16 @@ const CubeSceneInner = ({ cubies, animFrame, interactive, autoRotateIdle }: Scen
     return { staticCubies: stat, rotatingCubies: rot };
   }, [cubies, animFrame]);
 
+  // In turn-primary mode, single-finger / left-mouse is reserved for face
+  // turns (handled at the DOM level). OrbitControls gets two-finger rotate
+  // and right-mouse rotate so the user can still orbit the camera.
+  const touches = gestureMode === 'turn-primary'
+    ? { ONE: undefined as unknown as THREE.TOUCH, TWO: THREE.TOUCH.ROTATE }
+    : { ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN };
+  const mouseButtons = gestureMode === 'turn-primary'
+    ? { LEFT: undefined as unknown as THREE.MOUSE, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.ROTATE }
+    : undefined;
+
   return (
     <>
       <ambientLight intensity={0.6} />
@@ -170,7 +183,8 @@ const CubeSceneInner = ({ cubies, animFrame, interactive, autoRotateIdle }: Scen
           dampingFactor={0.1}
           rotateSpeed={0.8}
           enableDamping={true}
-          touches={{ ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN }}
+          touches={touches}
+          mouseButtons={mouseButtons}
         />
       )}
     </>
