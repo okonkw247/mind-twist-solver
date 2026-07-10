@@ -16,7 +16,7 @@
  *     explicitly passed.
  */
 
-import { useRef, useMemo, memo, forwardRef, useEffect, useCallback } from 'react';
+import { useRef, useMemo, memo, forwardRef, useEffect, useCallback, useState } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { OrbitControls, RoundedBox } from '@react-three/drei';
 import * as THREE from 'three';
@@ -208,6 +208,22 @@ interface CubeRenderer3DProps {
   gestureMode?: GestureMode;
 }
 
+const MOVE_META: Record<string, { label: string; color: string; hint: string }> = {
+  U: { label: "U", color: "#F8F8F8", hint: "Up · clockwise" },
+  "U'": { label: "U'", color: "#F8F8F8", hint: "Up · counter" },
+  R: { label: "R", color: "#C41E3A", hint: "Right · clockwise" },
+  "R'": { label: "R'", color: "#C41E3A", hint: "Right · counter" },
+};
+
+function predictMove(dx: number, dy: number): string | null {
+  const ax = Math.abs(dx);
+  const ay = Math.abs(dy);
+  const THRESHOLD = 28;
+  if (Math.max(ax, ay) < THRESHOLD) return null;
+  if (ax > ay) return dx > 0 ? "U" : "U'";
+  return dy < 0 ? "R" : "R'";
+}
+
 const CubeRenderer3D = forwardRef<HTMLDivElement, CubeRenderer3DProps>(
   ({ size = 260, interactive = true, autoRotateIdle, enableInputs, gestureMode = 'hybrid' }, ref) => {
     const { cubies, animFrame, enqueue } = useCubeContext();
@@ -215,6 +231,8 @@ const CubeRenderer3D = forwardRef<HTMLDivElement, CubeRenderer3DProps>(
 
     const inputsOn = enableInputs ?? interactive;
     const idle = autoRotateIdle ?? (!interactive && idleAutoRotate);
+
+    const [preview, setPreview] = useState<string | null>(null);
 
     // ── Keyboard input (R U L D F B  + shift for prime, "2" toggle) ────────
     useEffect(() => {
@@ -236,13 +254,19 @@ const CubeRenderer3D = forwardRef<HTMLDivElement, CubeRenderer3DProps>(
     const activePointers = useRef<Set<number>>(new Set());
     const onPointerDown = useCallback((e: React.PointerEvent) => {
       activePointers.current.add(e.pointerId);
-      // Second finger → cancel any in-flight swipe so OrbitControls owns the gesture
       if (activePointers.current.size > 1) {
         swipeStart.current = null;
+        setPreview(null);
         return;
       }
       if (e.button !== 0) return;
       swipeStart.current = { x: e.clientX, y: e.clientY, id: e.pointerId };
+    }, []);
+    const onPointerMove = useCallback((e: React.PointerEvent) => {
+      const start = swipeStart.current;
+      if (!start || start.id !== e.pointerId) return;
+      const next = predictMove(e.clientX - start.x, e.clientY - start.y);
+      setPreview((prev) => (prev === next ? prev : next));
     }, []);
     const onPointerUp = useCallback(
       (e: React.PointerEvent) => {
@@ -250,36 +274,33 @@ const CubeRenderer3D = forwardRef<HTMLDivElement, CubeRenderer3DProps>(
         const start = swipeStart.current;
         if (start && start.id !== e.pointerId) return;
         swipeStart.current = null;
+        setPreview(null);
         if (!start || !inputsOn) return;
-        const dx = e.clientX - start.x;
-        const dy = e.clientY - start.y;
-        const ax = Math.abs(dx);
-        const ay = Math.abs(dy);
-        const THRESHOLD = 28;
-        if (Math.max(ax, ay) < THRESHOLD) return; // treat as tap
-        let move: string;
-        if (ax > ay) move = dx > 0 ? 'U' : "U'";
-        else move = dy < 0 ? 'R' : "R'";
-        enqueue(move);
+        const move = predictMove(e.clientX - start.x, e.clientY - start.y);
+        if (move) enqueue(move);
       },
       [inputsOn, enqueue],
     );
     const onPointerCancel = useCallback((e: React.PointerEvent) => {
       activePointers.current.delete(e.pointerId);
       swipeStart.current = null;
+      setPreview(null);
     }, []);
+
+    const previewMeta = preview ? MOVE_META[preview] : null;
 
     return (
       <div
         ref={ref}
         style={{ width: size, height: size }}
         onPointerDown={inputsOn ? onPointerDown : undefined}
+        onPointerMove={inputsOn ? onPointerMove : undefined}
         onPointerUp={inputsOn ? onPointerUp : undefined}
         onPointerCancel={inputsOn ? onPointerCancel : undefined}
         className={
           interactive
-            ? 'cursor-grab active:cursor-grabbing touch-none select-none'
-            : 'pointer-events-none select-none'
+            ? 'relative cursor-grab active:cursor-grabbing touch-none select-none'
+            : 'relative pointer-events-none select-none'
         }
       >
         <Canvas
@@ -296,10 +317,40 @@ const CubeRenderer3D = forwardRef<HTMLDivElement, CubeRenderer3DProps>(
             gestureMode={gestureMode}
           />
         </Canvas>
+
+        {previewMeta && (
+          <>
+            {/* Colored glow ring signalling the target face */}
+            <div
+              className="pointer-events-none absolute inset-0 rounded-2xl animate-fade-in"
+              style={{
+                boxShadow: `inset 0 0 0 3px ${previewMeta.color}, 0 0 40px ${previewMeta.color}55`,
+                transition: 'box-shadow 120ms ease-out',
+              }}
+            />
+            {/* Move badge */}
+            <div className="pointer-events-none absolute top-3 left-1/2 -translate-x-1/2 animate-fade-in">
+              <div
+                className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-background/85 backdrop-blur-sm border shadow-lg"
+                style={{ borderColor: previewMeta.color }}
+              >
+                <span
+                  className="w-2.5 h-2.5 rounded-full"
+                  style={{ backgroundColor: previewMeta.color, boxShadow: `0 0 8px ${previewMeta.color}` }}
+                />
+                <span className="font-mono font-bold text-sm tracking-wider">{previewMeta.label}</span>
+                <span className="text-[10px] text-muted-foreground uppercase tracking-wide">
+                  {previewMeta.hint}
+                </span>
+              </div>
+            </div>
+          </>
+        )}
       </div>
     );
   },
 );
+
 
 CubeRenderer3D.displayName = 'CubeRenderer3D';
 
