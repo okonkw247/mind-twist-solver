@@ -232,7 +232,7 @@ const CubeRenderer3D = forwardRef<HTMLDivElement, CubeRenderer3DProps>(
     const inputsOn = enableInputs ?? interactive;
     const idle = autoRotateIdle ?? (!interactive && idleAutoRotate);
 
-    const [preview, setPreview] = React.useState<string | null>(null);
+    const [preview, setPreview] = useState<string | null>(null);
 
     // ── Keyboard input (R U L D F B  + shift for prime, "2" toggle) ────────
     useEffect(() => {
