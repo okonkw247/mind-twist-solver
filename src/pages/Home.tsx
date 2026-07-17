@@ -1,169 +1,97 @@
-import { Suspense, useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Settings, Trophy, Play, Puzzle, Star } from 'lucide-react';
-import RigidCube3D, { RigidCubeHandle } from '@/components/RigidCube3D';
-import BottomNav from '@/components/BottomNav';
-import StatCard from '@/components/StatCard';
-import { generateScramble, parseSolution } from '@/lib/kociembaSolver';
+import {
+  Camera,
+  Settings as SettingsIcon,
+  Timer as TimerIcon,
+  Box,
+  Grid3x3,
+  Puzzle,
+} from 'lucide-react';
+
+const tiles = [
+  { label: 'Manual Input', icon: Grid3x3, path: '/manual-input' },
+  { label: 'Camera Input', icon: Camera, path: '/camera' },
+  { label: 'Pattern Solver', icon: Puzzle, path: '/solver' },
+  { label: 'Virtual Cube', icon: Box, path: '/virtual-cube' },
+  { label: 'Cube Timer', icon: TimerIcon, path: '/timer' },
+  { label: 'Settings', icon: SettingsIcon, path: '/settings' },
+];
 
 const Home = () => {
   const navigate = useNavigate();
-  const cubeRef = useRef<RigidCubeHandle>(null);
-  const [bestTime] = useState('00:42.15');
-  const [solveCount] = useState(1284);
-  const [currentLevel] = useState(12);
-  const [rank] = useState('GRANDMASTER');
-  const [isScrambling, setIsScrambling] = useState(false);
-
-  // Auto-scramble on mount for visual effect
-  useEffect(() => {
-    const doScramble = async () => {
-      if (!cubeRef.current || isScrambling) return;
-      setIsScrambling(true);
-      
-      await new Promise(r => setTimeout(r, 500)); // Wait for render
-      
-      const scramble = generateScramble(8);
-      const moves = parseSolution(scramble);
-      
-      for (const move of moves) {
-        await cubeRef.current.executeMove(move.notation, 200);
-        await new Promise(r => setTimeout(r, 50));
-      }
-      
-      setIsScrambling(false);
-    };
-    
-    doScramble();
-  }, []);
 
   return (
-    <div className="min-h-screen bg-background pb-24">
-      {/* Header */}
-      <header className="flex items-center justify-between px-4 py-4 safe-top">
-        <button
-          onClick={() => navigate('/premium')}
-          className="btn-icon"
-          aria-label="Settings"
+    <div className="min-h-screen bg-background flex flex-col">
+      <header className="pt-10 pb-6 text-center">
+        <h1
+          className="text-6xl font-black tracking-tight"
+          style={{
+            color: 'hsl(140, 80%, 50%)',
+            textShadow: '0 4px 0 #000, 0 0 18px hsl(140 80% 50% / 0.45)',
+            WebkitTextStroke: '2px #000',
+          }}
         >
-          <Settings className="w-6 h-6" />
-        </button>
-        
-        <h1 className="text-xl font-bold tracking-wider">JSN SOLVER</h1>
-        
-        <button
-          onClick={() => navigate('/timer')}
-          className="btn-icon"
-          aria-label="Achievements"
-        >
-          <Trophy className="w-6 h-6" />
-        </button>
+          CubeX
+        </h1>
       </header>
 
-      <main className="px-4">
-        {/* Daily Challenge Card */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="glass-card mb-6 flex items-center justify-between"
-        >
-          <div className="flex-1">
-            <div className="flex items-center gap-2 mb-1">
-              <div className="w-2 h-2 rounded-full bg-destructive animate-pulse" />
-              <span className="text-xs font-semibold text-destructive uppercase tracking-wider">
-                Daily Challenge
-              </span>
-            </div>
-            <h3 className="text-lg font-bold mb-1">Mirror Scramble</h3>
-            <p className="text-sm text-muted-foreground mb-3">Beat 00:30 to win 500 Gold</p>
+      <main className="flex-1 px-4 max-w-xl mx-auto w-full pb-12">
+        <div className="rounded-2xl bg-card border border-border overflow-hidden">
+          <div className="flex items-center gap-2 px-4 py-3 border-b border-border">
+            <Box className="w-4 h-4 text-muted-foreground" />
+            <span className="text-sm font-semibold text-muted-foreground">Solve</span>
+          </div>
+
+          <div className="grid grid-cols-2">
+            {tiles.slice(0, 2).map((t, i) => (
+              <Tile key={t.path} {...t} onClick={() => navigate(t.path)} index={i} divideRight={i === 0} />
+            ))}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3 mt-3">
+          {tiles.slice(2).map((t, i) => (
             <button
-              onClick={() => navigate('/play-cube')}
-              className="btn-primary py-2 px-6 text-sm"
+              key={t.path}
+              onClick={() => navigate(t.path)}
+              className="aspect-square rounded-2xl bg-card border border-border flex flex-col items-center justify-center gap-3 hover:bg-secondary/40 active:scale-[0.98] transition-all"
             >
-              Join Now
+              <t.icon className="w-12 h-12" strokeWidth={1.8} />
+              <span className="font-bold text-lg">{t.label}</span>
             </button>
-          </div>
-          <div className="w-20 h-20 rounded-full bg-secondary/50 flex items-center justify-center">
-            <Puzzle className="w-10 h-10 text-muted-foreground" />
-          </div>
-        </motion.div>
-
-        {/* 3D Cube Display */}
-        <motion.div
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ delay: 0.1 }}
-          className="relative rounded-3xl bg-gradient-to-br from-card to-secondary/50 p-6 mb-6 overflow-hidden"
-        >
-          {/* Ambient glow */}
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-            <div className="w-64 h-64 rounded-full bg-primary/10 blur-3xl" />
-          </div>
-          
-          <div className="relative flex justify-center py-4">
-            <Suspense fallback={
-              <div className="w-48 h-48 flex items-center justify-center">
-                <div className="w-12 h-12 border-4 border-primary/30 border-t-primary rounded-full animate-spin" />
-              </div>
-            }>
-              <RigidCube3D ref={cubeRef} size={220} />
-            </Suspense>
-          </div>
-        </motion.div>
-
-        {/* Rank Badge */}
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-          className="flex justify-center mb-6"
-        >
-          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-secondary border border-border">
-            <Star className="w-4 h-4 text-gold fill-gold" />
-            <span className="text-sm font-semibold tracking-wider">{rank} RANK</span>
-          </div>
-        </motion.div>
-
-        {/* Stats Grid */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3 }}
-          className="grid grid-cols-2 gap-4 mb-6"
-        >
-          <StatCard label="BEST TIME" value={bestTime} />
-          <StatCard label="SOLVES" value={solveCount.toLocaleString()} />
-        </motion.div>
-
-        {/* Action Buttons */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.4 }}
-          className="space-y-3"
-        >
-          <button
-            onClick={() => navigate('/play-cube')}
-            className="btn-primary w-full h-14 flex items-center justify-center gap-3 text-lg"
-          >
-            <Play className="w-6 h-6" />
-            PLAY GAME - LEVEL {currentLevel}
-          </button>
-          
-          <button
-            onClick={() => navigate('/solver')}
-            className="btn-secondary w-full h-14 flex items-center justify-center gap-3 text-lg"
-          >
-            <Puzzle className="w-5 h-5" />
-            FREE PLAY
-          </button>
-        </motion.div>
+          ))}
+        </div>
       </main>
-
-      <BottomNav variant="home" />
     </div>
   );
 };
+
+const Tile = ({
+  label,
+  icon: Icon,
+  onClick,
+  index,
+  divideRight,
+}: {
+  label: string;
+  icon: React.ElementType;
+  onClick: () => void;
+  index: number;
+  divideRight?: boolean;
+}) => (
+  <motion.button
+    initial={{ opacity: 0, y: 8 }}
+    animate={{ opacity: 1, y: 0 }}
+    transition={{ delay: index * 0.04 }}
+    onClick={onClick}
+    className={`py-10 flex flex-col items-center justify-center gap-3 hover:bg-secondary/40 active:scale-[0.98] transition-all ${
+      divideRight ? 'border-r border-border' : ''
+    }`}
+  >
+    <Icon className="w-12 h-12" strokeWidth={1.8} />
+    <span className="font-bold text-lg">{label}</span>
+  </motion.button>
+);
 
 export default Home;
