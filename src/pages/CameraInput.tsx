@@ -48,7 +48,7 @@ const CameraInput = () => {
       if (liveTimer.current) window.clearTimeout(liveTimer.current);
       liveTimer.current = null;
     };
-  }, [camera.status, camera]);
+  }, [camera.status, camera.capture]);
 
   const handleScan = useCallback(() => {
     const image = camera.capture();
@@ -64,7 +64,7 @@ const CameraInput = () => {
     }
   }, [camera, currentFace]);
 
-  useEffect(() => () => camera.stop(), [camera]);
+  useEffect(() => () => camera.stop(), [camera.stop]);
 
   const goSolve = () => {
     if (completedFaces !== 6) return;

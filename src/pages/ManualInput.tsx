@@ -20,7 +20,7 @@ const ManualInput = () => {
   const { toast } = useToast();
   const [selectedColor, setSelectedColor] = useState('white');
   const [isSolving, setIsSolving] = useState(false);
-  
+
   const {
     cubeState,
     currentFaceIndex,
@@ -41,7 +41,7 @@ const ManualInput = () => {
     const counts: Record<string, number> = {
       red: 0, white: 0, green: 0, orange: 0, yellow: 0, blue: 0
     };
-    
+
     Object.values(cubeState).forEach(face => {
       face.forEach(color => {
         if (color && color !== 'empty' && counts[color] !== undefined) {
@@ -58,7 +58,6 @@ const ManualInput = () => {
   };
 
   const handleSolve = async () => {
-    // Check color counts
     const invalidColors = Object.entries(colorCounts).filter(([_, count]) => count !== 9);
     if (invalidColors.length > 0) {
       toast({
@@ -70,17 +69,17 @@ const ManualInput = () => {
     }
 
     setIsSolving(true);
-    
+
     try {
       const result = await getSolutionMoves(cubeState);
-      
+
       if (result.success && result.moves) {
-        navigate('/solution', { 
-          state: { 
+        navigate('/solution', {
+          state: {
             solution: result.moves,
             moveCount: result.moves.length,
-            cubeState 
-          } 
+            cubeState
+          }
         });
       } else {
         toast({
@@ -104,7 +103,6 @@ const ManualInput = () => {
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
-      {/* Header */}
       <header className="flex items-center justify-between px-4 py-4 safe-top">
         <button
           onClick={() => navigate(-1)}
@@ -124,7 +122,6 @@ const ManualInput = () => {
       </header>
 
       <main className="flex-1 px-4 flex flex-col">
-        {/* Face Progress */}
         <div className="mb-4">
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm font-semibold">Face Progress</span>
@@ -140,11 +137,10 @@ const ManualInput = () => {
           </div>
         </div>
 
-        {/* Current Face Label */}
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold uppercase tracking-wide">{currentFaceLabel}</h2>
           <div className="flex items-center gap-2">
-            <div 
+            <div
               className="w-4 h-4 rounded"
               style={{ backgroundColor: CUBE_COLORS.find(c => c.name === selectedColor)?.hex }}
             />
@@ -152,9 +148,7 @@ const ManualInput = () => {
           </div>
         </div>
 
-        {/* 3x3 Face Grid with Mini Cube Preview */}
         <div className="relative flex-1 flex items-center justify-center mb-6">
-          {/* Face Grid */}
           <motion.div
             key={currentFaceIndex}
             initial={{ opacity: 0, scale: 0.95 }}
@@ -165,15 +159,15 @@ const ManualInput = () => {
               {currentFaceColors.map((color, index) => {
                 const colorData = CUBE_COLORS.find(c => c.name === color);
                 const isEmpty = color === 'empty';
-                
+
                 return (
                   <motion.button
                     key={index}
                     whileTap={{ scale: 0.95 }}
                     onClick={() => handleCellClick(index)}
                     className={`rounded-xl flex items-center justify-center transition-all ${
-                      isEmpty 
-                        ? 'bg-muted border-2 border-dashed border-muted-foreground/30' 
+                      isEmpty
+                        ? 'bg-muted border-2 border-dashed border-muted-foreground/30'
                         : 'shadow-lg'
                     }`}
                     style={!isEmpty ? { backgroundColor: colorData?.hex } : {}}
@@ -187,13 +181,12 @@ const ManualInput = () => {
             </div>
           </motion.div>
 
-          {/* Mini Cube Preview */}
           <div className="absolute top-0 right-0 bg-card/80 backdrop-blur rounded-full p-3">
             <div className="w-12 h-12 relative">
               <div className="grid grid-cols-3 gap-0.5 w-full h-full">
                 {Array(9).fill(null).map((_, i) => (
-                  <div 
-                    key={i} 
+                  <div
+                    key={i}
                     className={`rounded-sm ${i === 4 ? 'bg-muted-foreground/50' : 'bg-muted'}`}
                   />
                 ))}
@@ -205,18 +198,16 @@ const ManualInput = () => {
           </div>
         </div>
 
-        {/* Instructions */}
         <p className="text-center text-muted-foreground text-sm mb-6">
           Tap a square to cycle colors or select from the palette below
         </p>
 
-        {/* Color Palette */}
         <div className="flex justify-center gap-3 mb-6">
           {CUBE_COLORS.map((color) => {
             const isSelected = selectedColor === color.name;
             const count = colorCounts[color.name] || 0;
             const isComplete = count === 9;
-            
+
             return (
               <button
                 key={color.name}
@@ -236,7 +227,6 @@ const ManualInput = () => {
           })}
         </div>
 
-        {/* Navigation Buttons */}
         <div className="flex gap-3 mb-4">
           <button
             onClick={prevFace}
@@ -246,7 +236,7 @@ const ManualInput = () => {
             <ChevronLeft className="w-5 h-5" />
             Back Face
           </button>
-          
+
           <button
             onClick={nextFace}
             disabled={currentFaceIndex === 5}
@@ -257,7 +247,16 @@ const ManualInput = () => {
           </button>
         </div>
 
-        {/* Switch to Camera */}
+        {isCubeComplete && (
+          <button
+            onClick={handleSolve}
+            disabled={isSolving}
+            className="btn-primary w-full h-14 mb-4 disabled:opacity-50"
+          >
+            {isSolving ? 'Solving...' : 'Solve Cube'}
+          </button>
+        )}
+
         <button
           onClick={() => navigate('/camera')}
           className="w-full py-4 rounded-xl bg-secondary/50 flex items-center justify-center gap-2 text-muted-foreground mb-6"
