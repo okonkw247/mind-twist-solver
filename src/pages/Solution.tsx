@@ -283,15 +283,9 @@ const Solution = () => {
           animate={{ opacity: 1, scale: 1 }}
           className={`flex justify-center mb-4 rounded-3xl transition-shadow duration-300 ${highlightClass}`}
         >
-          <Suspense
-            fallback={
-              <div className="w-[260px] h-[260px] flex items-center justify-center bg-secondary/20 rounded-2xl">
-                <div className="w-12 h-12 border-4 border-primary/30 border-t-primary rounded-full animate-spin" />
-              </div>
-            }
-          >
-            <CubeRenderer3D size={260} />
-          </Suspense>
+          <div className="w-[260px] h-[260px] flex items-center justify-center bg-secondary/20 rounded-2xl text-muted-foreground">
+            3D cube temporarily disabled for testing
+          </div>
         </motion.div>
 
         <motion.div

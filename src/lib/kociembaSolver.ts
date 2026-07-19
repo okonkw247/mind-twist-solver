@@ -81,10 +81,13 @@ async function initSolver(): Promise<void> {
   if (solverInitialized) return;
   
   return new Promise((resolve) => {
-    // Initialize the solver (generates lookup tables)
-    Cube.initSolver();
-    solverInitialized = true;
-    resolve();
+    // Defer so the browser can repaint (e.g. show a loading spinner)
+    // before this heavy synchronous computation blocks the main thread.
+    setTimeout(() => {
+      Cube.initSolver();
+      solverInitialized = true;
+      resolve();
+    }, 0);
   });
 }
 
