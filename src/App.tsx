@@ -15,8 +15,6 @@ import CameraInput from "./pages/CameraInput";
 import Solution from "./pages/Solution";
 import Premium from "./pages/Premium";
 import Timer from "./pages/Timer";
-import PlayCube from "./pages/PlayCube";
-import Solver from "./pages/Solver";
 import Collection from "./pages/Collection";
 import LevelComplete from "./pages/LevelComplete";
 import Settings from "./pages/Settings";
@@ -69,9 +67,6 @@ const AppContent = () => {
       <Route path="/solution" element={<Solution />} />
       <Route path="/premium" element={<Premium />} />
       <Route path="/timer" element={<Timer />} />
-      <Route path="/play-cube" element={<PlayCube />} />
-      <Route path="/compete" element={<PlayCube />} />
-      <Route path="/solver" element={<Solver />} />
       <Route path="/virtual-cube" element={<VirtualCube />} />
       <Route path="/collection" element={<Collection />} />
       <Route path="/level-complete" element={<LevelComplete />} />

@@ -16,7 +16,7 @@ interface BottomNavProps {
 const ITEMS: NavItem[] = [
   { icon: Home, label: 'Home', path: '/home' },
   { icon: Camera, label: 'Scan', path: '/camera' },
-  { icon: Puzzle, label: 'Solver', path: '/solver' },
+  { icon: Puzzle, label: 'Solver', path: '/virtual-cube' },
   { icon: Trophy, label: 'Timer', path: '/timer' },
   { icon: User, label: 'Profile', path: '/profile' },
   { icon: Settings, label: 'Settings', path: '/settings' },

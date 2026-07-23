@@ -123,7 +123,7 @@ const LevelComplete = () => {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.8 }}
-          onClick={() => navigate('/play-cube', { state: { level: level + 1 } })}
+          onClick={() => navigate('/virtual-cube', { state: { level: level + 1 } })}
           className="btn-primary w-full h-14 text-lg font-bold"
         >
           NEXT LEVEL

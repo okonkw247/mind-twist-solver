@@ -12,7 +12,6 @@ import {
 const tiles = [
   { label: 'Manual Input', icon: Grid3x3, path: '/manual-input' },
   { label: 'Camera Input', icon: Camera, path: '/camera' },
-  { label: 'Pattern Solver', icon: Puzzle, path: '/solver' },
   { label: 'Virtual Cube', icon: Box, path: '/virtual-cube' },
   { label: 'Cube Timer', icon: TimerIcon, path: '/timer' },
   { label: 'Settings', icon: SettingsIcon, path: '/settings' },
