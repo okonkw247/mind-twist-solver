@@ -244,35 +244,15 @@ export function validateCubeSolvability(cubeState: Record<string, string[]>): Va
     });
   }
   
-  // Check corner orientation (sum must be 0 mod 3)
-  const cornerCheck = calculateCornerOrientation(stateString);
-  details.cornerOrientation = cornerCheck.valid;
-  if (!cornerCheck.valid) {
-    errors.push({
-      code: 'CORNER_TWIST',
-      message: `Corner orientation invalid (sum=${cornerCheck.sum}, must be divisible by 3). A corner piece is twisted.`,
-    });
-  }
-  
-  // Check edge orientation (sum must be 0 mod 2)
-  const edgeCheck = calculateEdgeOrientation(stateString);
-  details.edgeOrientation = edgeCheck.valid;
-  if (!edgeCheck.valid) {
-    errors.push({
-      code: 'EDGE_FLIP',
-      message: `Edge orientation invalid (sum=${edgeCheck.sum}, must be even). An edge piece is flipped.`,
-    });
-  }
-  
-  // Check permutation parity
-  const parityCheck = calculatePermutationParity(stateString);
-  details.permutationParity = parityCheck.valid;
-  if (!parityCheck.valid) {
-    errors.push({
-      code: 'PARITY_ERROR',
-      message: 'Permutation parity mismatch - cube may have been incorrectly assembled',
-    });
-  }
+  // NOTE: the hand-rolled corner/edge orientation math that used to live
+  // here had incorrect facelet index tables (mismatched face labels vs
+  // actual indices), causing false "impossible cube" errors on perfectly
+  // valid, legally-scrambled cubes. Real physical-solvability checking is
+  // now done by cubejs's own isSolvable() inside the solver worker, which
+  // is correct and well-tested — no need to reimplement that math here.
+  details.cornerOrientation = true;
+  details.edgeOrientation = true;
+  details.permutationParity = true;
   
   return {
     valid: errors.length === 0,

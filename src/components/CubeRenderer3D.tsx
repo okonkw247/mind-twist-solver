@@ -1,19 +1,16 @@
 /**
  * CubeRenderer3D — Reads from CubeProvider context and renders 3D cube.
  *
- * SaaS-grade visuals:
- *   - Pure black matte plastic body with subtle bevel highlight
- *   - Official WCA palette, slightly enriched roughness map look
- *   - Two-light setup, no shadows
- *
- * Real-time input (when interactive):
- *   - Swipe up/down/left/right on the cube surface → R / R' / U / U'
- *   - Keyboard: R U L D F B (shift = prime, "2" = double) — Solver-style speedcube map
- *   - Optional on-screen ControlPad rendered separately (`CubeControlPad`)
- *
- * Idle behaviour:
- *   - Honours global CubeSettings.idleAutoRotate unless `autoRotateIdle` is
- *     explicitly passed.
+ * Key fix: cubies NEVER move between different Three.js parent groups.
+ * Every cubie is a permanent, stable child of one root group. Each cubie
+ * independently checks whether ITS OWN (pre-move) position falls inside the
+ * currently-animating layer, and if so applies an extra temporary rotation
+ * on top of its own base orientation. This avoids any unmount/remount
+ * churn — which was previously happening on every single move, since
+ * moving a JSX element between two different parent <group>s forces React
+ * to destroy and recreate it even with a stable `key`. That churn is what
+ * caused cubies/colors to visibly break apart or flicker during fast
+ * multi-move sequences (like a full solve playing back rapidly).
  */
 
 import { useRef, useMemo, memo, forwardRef, useEffect, useCallback } from 'react';
@@ -25,9 +22,7 @@ import { useCubeSettings } from '@/cube/CubeSettings';
 import type { Cubie, ColorName, Vec3 } from '@/cube/CubeModel';
 import type { AnimationFrame } from '@/cube/AnimationController';
 
-// ── Shared geometries & materials ────────────────────────────────────────────
-
-const PLANE_GEO = new THREE.PlaneGeometry(0.82, 0.82);
+const PLANE_GEO = new THREE.PlaneGeometry(0.88, 0.88);
 
 const BODY_MAT = new THREE.MeshStandardMaterial({
   color: '#0a0a0a',
@@ -35,17 +30,14 @@ const BODY_MAT = new THREE.MeshStandardMaterial({
   metalness: 0.08,
 });
 
-// WCA palette, slightly richer specular response for a "real cube" feel.
 const FACELET_MATS: Record<ColorName, THREE.MeshStandardMaterial> = {
-  white:  new THREE.MeshStandardMaterial({ color: '#F8F8F8', roughness: 0.38, metalness: 0.02 }),
-  yellow: new THREE.MeshStandardMaterial({ color: '#FFD500', roughness: 0.38, metalness: 0.02 }),
-  red:    new THREE.MeshStandardMaterial({ color: '#C41E3A', roughness: 0.40, metalness: 0.02 }),
-  orange: new THREE.MeshStandardMaterial({ color: '#FF5800', roughness: 0.40, metalness: 0.02 }),
-  blue:   new THREE.MeshStandardMaterial({ color: '#0051BA', roughness: 0.40, metalness: 0.02 }),
-  green:  new THREE.MeshStandardMaterial({ color: '#009E60', roughness: 0.40, metalness: 0.02 }),
+  white:  new THREE.MeshStandardMaterial({ color: '#F8F8F8', roughness: 0.55, metalness: 0.05 }),
+  yellow: new THREE.MeshStandardMaterial({ color: '#FFD500', roughness: 0.55, metalness: 0.05 }),
+  red:    new THREE.MeshStandardMaterial({ color: '#C41E3A', roughness: 0.55, metalness: 0.05 }),
+  orange: new THREE.MeshStandardMaterial({ color: '#FF5800', roughness: 0.55, metalness: 0.05 }),
+  blue:   new THREE.MeshStandardMaterial({ color: '#0051BA', roughness: 0.55, metalness: 0.05 }),
+  green:  new THREE.MeshStandardMaterial({ color: '#009E60', roughness: 0.55, metalness: 0.05 }),
 };
-
-// ── Helpers ──────────────────────────────────────────────────────────────────
 
 function mat3ToQuaternion(m: import('@/cube/CubeModel').Mat3): THREE.Quaternion {
   const m4 = new THREE.Matrix4();
@@ -69,11 +61,26 @@ const FACELET_ROTATIONS: Record<string, [number, number, number]> = {
   '-1,0,0': [0, -Math.PI / 2, 0],
 };
 
-// ── Cubie mesh ───────────────────────────────────────────────────────────────
+const FACE_AXIS_MAP: Record<string, THREE.Vector3> = {
+  x: new THREE.Vector3(1, 0, 0),
+  y: new THREE.Vector3(0, 1, 0),
+  z: new THREE.Vector3(0, 0, 1),
+};
 
-const CubieMesh = memo(({ cubie }: { cubie: Cubie }) => {
+const FACE_LAYER_INDEX: Record<string, number> = { x: 0, y: 1, z: 2 };
+
+function isInAnimLayer(pos: Vec3, axis: string, layerValue: number): boolean {
+  return Math.round(pos[FACE_LAYER_INDEX[axis]]) === layerValue;
+}
+
+interface CubieMeshProps {
+  cubie: Cubie;
+  animFrameRef: React.RefObject<AnimationFrame | null>;
+}
+
+const CubieMesh = memo(({ cubie, animFrameRef }: CubieMeshProps) => {
   const offset = 0.502;
-  const q = useMemo(() => mat3ToQuaternion(cubie.orientation), [cubie.orientation]);
+  const groupRef = useRef<THREE.Group>(null);
 
   const facelets = useMemo(() => {
     const result: JSX.Element[] = [];
@@ -88,75 +95,64 @@ const CubieMesh = memo(({ cubie }: { cubie: Cubie }) => {
     return result;
   }, [cubie.localColors]);
 
+  useFrame(() => {
+    const g = groupRef.current;
+    if (!g) return;
+
+    const animFrame = animFrameRef.current;
+    const basePos = new THREE.Vector3(cubie.position[0], cubie.position[1], cubie.position[2]);
+    // Computed fresh every frame (cheap plain math) instead of memoized —
+    // memoizing this was the actual bug: it froze each cubie's rotation
+    // at whatever it was on first mount, since nothing was forcing a
+    // React re-render anymore once we fixed the performance issue.
+    const baseQuat = mat3ToQuaternion(cubie.orientation);
+
+    if (animFrame && isInAnimLayer(cubie.position, animFrame.axis, animFrame.layerValue)) {
+      const axisVec = FACE_AXIS_MAP[animFrame.axis];
+      const turnQuat = new THREE.Quaternion().setFromAxisAngle(axisVec, animFrame.currentAngle);
+      g.position.copy(basePos.applyQuaternion(turnQuat));
+      g.quaternion.copy(turnQuat).multiply(baseQuat);
+    } else {
+      g.position.copy(basePos);
+      g.quaternion.copy(baseQuat);
+    }
+  });
+
   return (
-    <group position={cubie.position as unknown as [number, number, number]} quaternion={q}>
-      <RoundedBox args={[0.96, 0.96, 0.96]} radius={0.06} smoothness={4} material={BODY_MAT} />
+    <group ref={groupRef}>
+      <RoundedBox args={[0.96, 0.96, 0.96]} radius={0.1} smoothness={6} material={BODY_MAT} />
       {facelets}
     </group>
   );
 });
 CubieMesh.displayName = 'CubieMesh';
 
-// ── Scene ────────────────────────────────────────────────────────────────────
-
-const FACE_AXIS_MAP: Record<string, THREE.Vector3> = {
-  x: new THREE.Vector3(1, 0, 0),
-  y: new THREE.Vector3(0, 1, 0),
-  z: new THREE.Vector3(0, 0, 1),
-};
-
-const FACE_LAYER_INDEX: Record<string, number> = { x: 0, y: 1, z: 2 };
-
-function isInAnimLayer(pos: Vec3, axis: string, layerValue: number): boolean {
-  return Math.round(pos[FACE_LAYER_INDEX[axis]]) === layerValue;
-}
-
 interface SceneProps {
   cubies: readonly Cubie[];
-  animFrame: AnimationFrame | null;
+  animFrameRef: React.RefObject<AnimationFrame | null>;
   interactive: boolean;
   autoRotateIdle: boolean;
 }
 
-const CubeSceneInner = ({ cubies, animFrame, interactive, autoRotateIdle }: SceneProps) => {
+const CubeSceneInner = ({ cubies, animFrameRef, interactive, autoRotateIdle }: SceneProps) => {
   const cubeRootRef = useRef<THREE.Group>(null);
-  const rotatingGroupRef = useRef<THREE.Group>(null);
 
   useFrame((_, delta) => {
-    if (cubeRootRef.current && autoRotateIdle && !animFrame) {
+    if (cubeRootRef.current && autoRotateIdle && !animFrameRef.current) {
       cubeRootRef.current.rotation.y += delta * 0.35;
     }
-    if (!rotatingGroupRef.current) return;
-    if (!animFrame) {
-      rotatingGroupRef.current.quaternion.identity();
-      return;
-    }
-    const axisVec = FACE_AXIS_MAP[animFrame.axis];
-    rotatingGroupRef.current.quaternion.setFromAxisAngle(axisVec, animFrame.currentAngle);
   });
-
-  const { staticCubies, rotatingCubies } = useMemo(() => {
-    if (!animFrame) return { staticCubies: cubies, rotatingCubies: [] as readonly Cubie[] };
-    const stat: Cubie[] = [];
-    const rot: Cubie[] = [];
-    for (const c of cubies) {
-      if (isInAnimLayer(c.position, animFrame.axis, animFrame.layerValue)) rot.push(c);
-      else stat.push(c);
-    }
-    return { staticCubies: stat, rotatingCubies: rot };
-  }, [cubies, animFrame?.face, animFrame?.layerValue]);
 
   return (
     <>
       <ambientLight intensity={0.6} />
-      <directionalLight position={[8, 10, 6]} intensity={1.0} color="#fff5e6" />
+      <directionalLight position={[8, 10, 6]} intensity={1.3} color="#fff8ef" />
       <directionalLight position={[-6, -4, -8]} intensity={0.4} color="#cce0ff" />
 
       <group ref={cubeRootRef} rotation={autoRotateIdle ? [0.45, 0, 0] : [0.45, -0.55, 0]}>
-        {staticCubies.map((c) => <CubieMesh key={c.id} cubie={c} />)}
-        <group ref={rotatingGroupRef}>
-          {rotatingCubies.map((c) => <CubieMesh key={c.id} cubie={c} />)}
-        </group>
+        {cubies.map((c) => (
+          <CubieMesh key={c.id} cubie={c} animFrameRef={animFrameRef} />
+        ))}
       </group>
 
       {interactive && (
@@ -169,7 +165,7 @@ const CubeSceneInner = ({ cubies, animFrame, interactive, autoRotateIdle }: Scen
           maxPolarAngle={(Math.PI * 5) / 6}
           dampingFactor={0.1}
           rotateSpeed={0.8}
-          enableDamping={true}
+          enableDamping={false}
           touches={{ ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN }}
         />
       )}
@@ -177,27 +173,21 @@ const CubeSceneInner = ({ cubies, animFrame, interactive, autoRotateIdle }: Scen
   );
 };
 
-// ── Public component ─────────────────────────────────────────────────────────
-
 interface CubeRenderer3DProps {
   size?: number;
-  /** Allow user to orbit/zoom the camera. Default: true. */
   interactive?: boolean;
-  /** Override global CubeSettings.idleAutoRotate. */
   autoRotateIdle?: boolean;
-  /** Enable swipe gestures and keyboard input to drive face turns. Default = interactive. */
   enableInputs?: boolean;
 }
 
 const CubeRenderer3D = forwardRef<HTMLDivElement, CubeRenderer3DProps>(
   ({ size = 260, interactive = true, autoRotateIdle, enableInputs }, ref) => {
-    const { cubies, animFrame, enqueue } = useCubeContext();
+    const { cubies, animFrameRef, enqueue } = useCubeContext();
     const { idleAutoRotate } = useCubeSettings();
 
     const inputsOn = enableInputs ?? interactive;
     const idle = autoRotateIdle ?? (!interactive && idleAutoRotate);
 
-    // ── Keyboard input (R U L D F B  + shift for prime, "2" toggle) ────────
     useEffect(() => {
       if (!inputsOn) return;
       const handler = (e: KeyboardEvent) => {
@@ -212,10 +202,8 @@ const CubeRenderer3D = forwardRef<HTMLDivElement, CubeRenderer3DProps>(
       return () => window.removeEventListener('keydown', handler);
     }, [inputsOn, enqueue]);
 
-    // ── Touch / pointer swipe → face turn ───────────────────────────────────
     const swipeStart = useRef<{ x: number; y: number } | null>(null);
     const onPointerDown = useCallback((e: React.PointerEvent) => {
-      // Ignore right-clicks / secondary buttons
       if (e.button !== 0) return;
       swipeStart.current = { x: e.clientX, y: e.clientY };
     }, []);
@@ -229,12 +217,7 @@ const CubeRenderer3D = forwardRef<HTMLDivElement, CubeRenderer3DProps>(
         const ax = Math.abs(dx);
         const ay = Math.abs(dy);
         const THRESHOLD = 32;
-        if (Math.max(ax, ay) < THRESHOLD) return; // treat as tap, let OrbitControls handle
-        // Map cardinal swipe to face turns:
-        //   right   → U
-        //   left    → U'
-        //   up      → R
-        //   down    → R'
+        if (Math.max(ax, ay) < THRESHOLD) return;
         let move: string;
         if (ax > ay) move = dx > 0 ? 'U' : "U'";
         else move = dy < 0 ? 'R' : "R'";
@@ -258,12 +241,12 @@ const CubeRenderer3D = forwardRef<HTMLDivElement, CubeRenderer3DProps>(
         <Canvas
           camera={{ position: [5, 4, 5], fov: 40 }}
           gl={{ antialias: true, powerPreference: 'high-performance' }}
-          dpr={[1, 1.5]}
+          dpr={[1, 2]}
           shadows={false}
         >
           <CubeSceneInner
             cubies={cubies}
-            animFrame={animFrame}
+            animFrameRef={animFrameRef}
             interactive={interactive}
             autoRotateIdle={idle}
           />

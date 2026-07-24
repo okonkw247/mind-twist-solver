@@ -70,6 +70,10 @@ export interface CubeContextValue {
   getCubiesInLayer: (face: FaceName) => Cubie[];
   /** Direct access to the model (for advanced use) */
   model: CubeModel;
+  /** Always-current animation frame, updated synchronously — read this
+   * directly in render loops instead of the reactive `animFrame` value
+   * to avoid any React-scheduling delay at move transitions. */
+  animFrameRef: React.RefObject<AnimationFrame | null>;
   /** Force a re-render after directly mutating the model (advanced use) */
   bumpVersion: () => void;
 }
@@ -84,6 +88,10 @@ export function CubeProvider({ children }: { children: ReactNode }) {
   const controllerRef = useRef<AnimationController>(
     new AnimationController(modelRef.current)
   );
+  // Updated synchronously, directly by the controller callbacks below —
+  // never via React state — so the renderer always sees the true current
+  // frame with zero delay, even right at a move-to-move transition.
+  const animFrameRef = useRef<AnimationFrame | null>(null);
 
   // Minimal reactive state
   const [version, setVersion] = useState(0);
@@ -97,10 +105,12 @@ export function CubeProvider({ children }: { children: ReactNode }) {
 
     ctrl.setCallbacks({
       onFrame: (frame) => {
+        animFrameRef.current = frame;
         setAnimFrame(frame);
         setIsAnimating(true);
       },
       onMoveComplete: () => {
+        animFrameRef.current = null;
         setAnimFrame(null);
         // Bump version so consumers re-read cubies
         setVersion((v) => v + 1);
@@ -262,6 +272,7 @@ export function CubeProvider({ children }: { children: ReactNode }) {
       isSolved,
       getCubiesInLayer,
       model: modelRef.current,
+      animFrameRef,
       bumpVersion,
     }),
     [
