@@ -1,28 +1,68 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, RefreshCw, Trash2, Trophy, Clock, X, AlertCircle, Hand } from 'lucide-react';
+import {
+  ArrowLeft,
+  RefreshCw,
+  Trash2,
+  Trophy,
+  Clock,
+  X,
+  AlertCircle,
+  Hand,
+  Settings as SettingsIcon,
+} from 'lucide-react';
 import { useWCATimer, formatWCATime, formatTimeWithPenalty } from '@/hooks/useWCATimer';
 import { generateScramble } from '@/lib/kociembaSolver';
 
 /**
- * WCA Hand-Pad Timer (landscape).
+ * WCA Hand-Pad Timer (landscape) with configurable hold threshold + debounce.
  *
- * Interaction:
- *  - Two large pads (left + right). User places both hands.
- *  - After holding both pads for 500ms → "READY" (green).
- *  - Releasing either pad → timer starts.
- *  - While running, touching any pad → timer stops.
- *  - After stop, tap Save / New scramble.
+ * Reliability rules:
+ *  - HOLD threshold (configurable): both pads must remain continuously held for
+ *    this long before "READY" fires. Any release inside the window aborts.
+ *  - Start-debounce: after the timer starts, any pad input within `startDebounceMs`
+ *    is ignored so accidental release-tap doesn't instantly stop it.
+ *  - Stop-debounce: after stop, pads are locked for `stopDebounceMs` before a
+ *    new hold can begin, preventing a stray touch from restarting the flow.
  */
 
-const HOLD_READY_MS = 500;
+const SETTINGS_KEY = 'jsn-timer-hand-settings';
+
+interface HandSettings {
+  holdMs: number;         // 200–1500
+  startDebounceMs: number; // 100–500
+  stopDebounceMs: number;  // 100–1000
+}
+
+const DEFAULT_SETTINGS: HandSettings = {
+  holdMs: 500,
+  startDebounceMs: 250,
+  stopDebounceMs: 400,
+};
+
+function loadSettings(): HandSettings {
+  try {
+    const raw = localStorage.getItem(SETTINGS_KEY);
+    if (!raw) return DEFAULT_SETTINGS;
+    const parsed = JSON.parse(raw);
+    return { ...DEFAULT_SETTINGS, ...parsed };
+  } catch {
+    return DEFAULT_SETTINGS;
+  }
+}
 
 const Timer = () => {
   const navigate = useNavigate();
   const [scramble, setScramble] = useState('');
   const [showRecords, setShowRecords] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const [lastSavedTime, setLastSavedTime] = useState<number | null>(null);
+  const [settings, setSettings] = useState<HandSettings>(loadSettings);
+
+  useEffect(() => {
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+  }, [settings]);
 
   const {
     phase,
@@ -46,49 +86,85 @@ const Timer = () => {
   const [leftDown, setLeftDown] = useState(false);
   const [rightDown, setRightDown] = useState(false);
   const [ready, setReady] = useState(false);
+  const [holdProgress, setHoldProgress] = useState(0); // 0..1
   const holdTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const holdRafRef = useRef<number | null>(null);
+  const runStartRef = useRef<number>(0);
+  const stopLockUntilRef = useRef<number>(0);
 
   useEffect(() => {
     setScramble(generateScramble(20));
   }, []);
+
+  const clearHoldTimers = () => {
+    if (holdTimerRef.current) {
+      clearTimeout(holdTimerRef.current);
+      holdTimerRef.current = null;
+    }
+    if (holdRafRef.current) {
+      cancelAnimationFrame(holdRafRef.current);
+      holdRafRef.current = null;
+    }
+  };
 
   const newScramble = useCallback(() => {
     setScramble(generateScramble(20));
     resetTimer();
     setLastSavedTime(null);
     setReady(false);
+    setHoldProgress(0);
+    clearHoldTimers();
   }, [resetTimer]);
 
-  // Both hands down → start hold-to-ready countdown
+  // Hold-to-ready with progress indicator
   useEffect(() => {
     if (phase === 'running' || phase === 'stopped') return;
-    if (leftDown && rightDown) {
-      holdTimerRef.current = setTimeout(() => setReady(true), HOLD_READY_MS);
-      return () => {
-        if (holdTimerRef.current) clearTimeout(holdTimerRef.current);
-      };
-    } else {
-      if (holdTimerRef.current) clearTimeout(holdTimerRef.current);
-      // If we were ready and user releases → start solve
-      if (ready && phase === 'idle') {
-        startSolve();
-      }
-      setReady(false);
-    }
-  }, [leftDown, rightDown, ready, phase, startSolve]);
 
-  // Any pad press while running → stop
+    if (leftDown && rightDown) {
+      const start = performance.now();
+      const hold = settings.holdMs;
+      const tick = () => {
+        const p = Math.min(1, (performance.now() - start) / hold);
+        setHoldProgress(p);
+        if (p < 1) holdRafRef.current = requestAnimationFrame(tick);
+      };
+      holdRafRef.current = requestAnimationFrame(tick);
+      holdTimerRef.current = setTimeout(() => setReady(true), hold);
+
+      return () => clearHoldTimers();
+    }
+
+    // Not both down anymore
+    clearHoldTimers();
+    // If we were ready and user releases → start solve
+    if (ready && phase === 'idle') {
+      runStartRef.current = performance.now();
+      startSolve();
+    }
+    setReady(false);
+    setHoldProgress(0);
+  }, [leftDown, rightDown, ready, phase, startSolve, settings.holdMs]);
+
   const handlePadDown = useCallback(
     (side: 'L' | 'R') => {
+      const now = performance.now();
+      // Stop-debounce lock after a solve stops
+      if (now < stopLockUntilRef.current) return;
+
       if (phase === 'running') {
+        // Start-debounce: ignore near-instant taps after start
+        if (now - runStartRef.current < settings.startDebounceMs) return;
         stopTimer();
+        stopLockUntilRef.current = now + settings.stopDebounceMs;
+        setLeftDown(false);
+        setRightDown(false);
         return;
       }
       if (phase === 'stopped') return;
       if (side === 'L') setLeftDown(true);
       else setRightDown(true);
     },
-    [phase, stopTimer],
+    [phase, stopTimer, settings.startDebounceMs, settings.stopDebounceMs],
   );
 
   const handlePadUp = useCallback((side: 'L' | 'R') => {
@@ -96,13 +172,17 @@ const Timer = () => {
     else setRightDown(false);
   }, []);
 
-  // Spacebar fallback: hold-space = both hands, release = start, tap while running = stop
+  // Spacebar fallback
   useEffect(() => {
     const kd = (e: KeyboardEvent) => {
       if (e.code !== 'Space' || e.repeat) return;
       e.preventDefault();
+      const now = performance.now();
+      if (now < stopLockUntilRef.current) return;
       if (phase === 'running') {
+        if (now - runStartRef.current < settings.startDebounceMs) return;
         stopTimer();
+        stopLockUntilRef.current = now + settings.stopDebounceMs;
       } else if (phase === 'idle') {
         setLeftDown(true);
         setRightDown(true);
@@ -122,7 +202,7 @@ const Timer = () => {
       window.removeEventListener('keydown', kd);
       window.removeEventListener('keyup', ku);
     };
-  }, [phase, stopTimer]);
+  }, [phase, stopTimer, settings.startDebounceMs, settings.stopDebounceMs]);
 
   const handleSave = () => {
     if (phase === 'stopped' && lastSavedTime === null) {
@@ -134,7 +214,6 @@ const Timer = () => {
   const isRunning = phase === 'running';
   const isStopped = phase === 'stopped';
 
-  // Pad visual state
   const padState = (down: boolean) => {
     if (isRunning) return 'stop';
     if (isStopped) return 'idle';
@@ -159,6 +238,7 @@ const Timer = () => {
   const HandPad = ({ side }: { side: 'L' | 'R' }) => {
     const down = side === 'L' ? leftDown : rightDown;
     const state = padState(down);
+    const showProgress = leftDown && rightDown && !ready && !isRunning && !isStopped;
     return (
       <button
         type="button"
@@ -169,9 +249,15 @@ const Timer = () => {
         onPointerUp={() => handlePadUp(side)}
         onPointerCancel={() => handlePadUp(side)}
         onPointerLeave={() => handlePadUp(side)}
-        className={`flex-1 h-full rounded-3xl border-2 transition-all duration-150 flex flex-col items-center justify-center gap-3 select-none touch-none ${padClasses(state)}`}
+        className={`relative flex-1 h-full rounded-3xl border-2 transition-all duration-150 flex flex-col items-center justify-center gap-3 select-none touch-none overflow-hidden ${padClasses(state)}`}
         aria-label={`${side === 'L' ? 'Left' : 'Right'} hand pad`}
       >
+        {showProgress && (
+          <div
+            className="absolute bottom-0 left-0 h-1.5 bg-amber-400 transition-[width] duration-75"
+            style={{ width: `${holdProgress * 100}%` }}
+          />
+        )}
         <Hand
           className={`w-20 h-20 md:w-28 md:h-28 transition-transform ${
             side === 'R' ? 'scale-x-[-1]' : ''
@@ -193,7 +279,6 @@ const Timer = () => {
 
   return (
     <div className="fixed inset-0 bg-background flex flex-col overflow-hidden">
-      {/* Header */}
       <header className="flex items-center justify-between px-4 py-2 safe-top shrink-0">
         <button onClick={() => navigate('/home')} className="btn-icon" aria-label="Back">
           <ArrowLeft className="w-5 h-5" />
@@ -214,8 +299,15 @@ const Timer = () => {
           </div>
         </div>
         <button
+          onClick={() => setShowSettings(true)}
+          className="btn-icon"
+          aria-label="Timer settings"
+        >
+          <SettingsIcon className="w-5 h-5" />
+        </button>
+        <button
           onClick={() => setShowRecords(true)}
-          className="btn-icon relative"
+          className="btn-icon relative ml-1"
           aria-label="Records"
         >
           <Trophy className="w-5 h-5" />
@@ -227,7 +319,6 @@ const Timer = () => {
         </button>
       </header>
 
-      {/* Warning */}
       <AnimatePresence>
         {warning.message && (
           <motion.div
@@ -242,11 +333,9 @@ const Timer = () => {
         )}
       </AnimatePresence>
 
-      {/* Landscape stage: [ pad | display | pad ] */}
       <main className="flex-1 grid grid-cols-[1fr_auto_1fr] gap-3 px-3 pb-3 min-h-0">
         <HandPad side="L" />
 
-        {/* Center display */}
         <div className="flex flex-col items-center justify-center px-4 md:px-8 min-w-[220px] md:min-w-[320px]">
           <motion.p
             key={phase}
@@ -276,11 +365,10 @@ const Timer = () => {
           )}
 
           <div className="mt-4 text-center text-xs md:text-sm text-muted-foreground min-h-5">
+            {phase === 'idle' && !leftDown && !rightDown && 'Place both hands on the pads'}
             {phase === 'idle' &&
-              !leftDown &&
-              !rightDown &&
-              'Place both hands on the pads'}
-            {phase === 'idle' && (leftDown || rightDown) && !ready && !(leftDown && rightDown) &&
+              (leftDown || rightDown) &&
+              !(leftDown && rightDown) &&
               'Place the other hand'}
             {phase === 'idle' && leftDown && rightDown && !ready && 'Hold still…'}
             {phase === 'idle' && ready && 'Release to start!'}
@@ -325,7 +413,6 @@ const Timer = () => {
             </motion.div>
           )}
 
-          {/* Stats row */}
           <div className="mt-4 grid grid-cols-3 gap-2 w-full text-center">
             <div>
               <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Best</p>
@@ -350,6 +437,82 @@ const Timer = () => {
 
         <HandPad side="R" />
       </main>
+
+      {/* Settings sheet */}
+      <AnimatePresence>
+        {showSettings && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/60 z-50"
+              onClick={() => setShowSettings(false)}
+            />
+            <motion.div
+              initial={{ y: '100%' }}
+              animate={{ y: 0 }}
+              exit={{ y: '100%' }}
+              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+              className="fixed bottom-0 left-0 right-0 bg-card rounded-t-3xl z-50 max-h-[80vh] flex flex-col"
+            >
+              <div className="flex justify-center py-3">
+                <div className="w-12 h-1.5 bg-muted rounded-full" />
+              </div>
+              <div className="flex items-center justify-between px-5 pb-4 border-b border-border">
+                <h2 className="text-lg font-semibold flex items-center gap-2">
+                  <SettingsIcon className="w-5 h-5 text-primary" />
+                  Timer sensitivity
+                </h2>
+                <button
+                  onClick={() => setShowSettings(false)}
+                  className="p-2 rounded-lg hover:bg-secondary transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="p-5 space-y-6">
+                <SliderRow
+                  label="Hold to ready"
+                  hint="How long both hands must stay on the pads before the timer arms."
+                  value={settings.holdMs}
+                  min={200}
+                  max={1500}
+                  step={50}
+                  unit="ms"
+                  onChange={(v) => setSettings((s) => ({ ...s, holdMs: v }))}
+                />
+                <SliderRow
+                  label="Start debounce"
+                  hint="Ignore pad input for this long after the timer starts (prevents instant-stop)."
+                  value={settings.startDebounceMs}
+                  min={100}
+                  max={500}
+                  step={25}
+                  unit="ms"
+                  onChange={(v) => setSettings((s) => ({ ...s, startDebounceMs: v }))}
+                />
+                <SliderRow
+                  label="Stop debounce"
+                  hint="Lock the pads for this long after stopping so a stray touch can't restart."
+                  value={settings.stopDebounceMs}
+                  min={100}
+                  max={1000}
+                  step={50}
+                  unit="ms"
+                  onChange={(v) => setSettings((s) => ({ ...s, stopDebounceMs: v }))}
+                />
+                <button
+                  onClick={() => setSettings(DEFAULT_SETTINGS)}
+                  className="w-full py-2.5 rounded-lg border border-border text-sm font-semibold hover:bg-secondary/40"
+                >
+                  Reset to defaults
+                </button>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
 
       {/* Records sheet */}
       <AnimatePresence>
@@ -444,5 +607,37 @@ const Timer = () => {
     </div>
   );
 };
+
+interface SliderRowProps {
+  label: string;
+  hint: string;
+  value: number;
+  min: number;
+  max: number;
+  step: number;
+  unit: string;
+  onChange: (v: number) => void;
+}
+
+const SliderRow = ({ label, hint, value, min, max, step, unit, onChange }: SliderRowProps) => (
+  <div>
+    <div className="flex items-baseline justify-between mb-1">
+      <label className="text-sm font-semibold">{label}</label>
+      <span className="text-sm font-mono text-primary tabular-nums">
+        {value} {unit}
+      </span>
+    </div>
+    <input
+      type="range"
+      min={min}
+      max={max}
+      step={step}
+      value={value}
+      onChange={(e) => onChange(Number(e.target.value))}
+      className="w-full accent-primary"
+    />
+    <p className="text-xs text-muted-foreground mt-1">{hint}</p>
+  </div>
+);
 
 export default Timer;
