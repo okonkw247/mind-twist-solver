@@ -5,7 +5,7 @@
  * Always release tracks on unmount to prevent the browser camera light staying on.
  */
 
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 
 export type CameraStatus = 'idle' | 'requesting' | 'ready' | 'denied' | 'unavailable' | 'error';
 
@@ -23,6 +23,7 @@ export interface UseCameraResult {
   videoRef: React.RefObject<HTMLVideoElement>;
   status: CameraStatus;
   error: string | null;
+  hasStream: boolean;
   start: () => Promise<void>;
   stop: () => void;
   /** Capture a still frame as ImageData from current video */
@@ -39,6 +40,7 @@ export function useCamera({
   const streamRef = useRef<MediaStream | null>(null);
   const [status, setStatus] = useState<CameraStatus>('idle');
   const [error, setError] = useState<string | null>(null);
+  const [hasStream, setHasStream] = useState(false);
 
   const stop = useCallback(() => {
     if (streamRef.current) {
@@ -48,6 +50,7 @@ export function useCamera({
     if (videoRef.current) {
       videoRef.current.srcObject = null;
     }
+    setHasStream(false);
     setStatus('idle');
   }, []);
 
@@ -69,26 +72,40 @@ export function useCamera({
       setStatus('requesting');
       setError(null);
 
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: { ideal: facingMode },
-          width: { ideal: width },
-          height: { ideal: height },
-        },
-        audio: false,
-      });
+      let stream: MediaStream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: { ideal: facingMode },
+            width: { ideal: width },
+            height: { ideal: height },
+          },
+          audio: false,
+        });
+      } catch (err) {
+        const e = err as DOMException;
+        if (e?.name !== 'OverconstrainedError') throw err;
+        stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+      }
 
       streamRef.current = stream;
+      setHasStream(true);
 
       if (videoRef.current) {
-        videoRef.current.srcObject = stream;
+        const video = videoRef.current;
+        video.autoplay = true;
+        video.playsInline = true;
+        video.srcObject = stream;
         // Required on iOS Safari for inline playback
-        videoRef.current.setAttribute('playsinline', 'true');
-        videoRef.current.muted = true;
+        video.setAttribute('playsinline', 'true');
+        video.muted = true;
         try {
-          await videoRef.current.play();
-        } catch {
-          // play() can reject if user has not interacted; we still treat as ready
+          await video.play();
+        } catch (playError) {
+          setStatus('error');
+          setError('Camera opened, but video playback was blocked. Tap Enable Camera again.');
+          console.warn('Camera video play failed', playError);
+          return;
         }
       }
 
@@ -110,7 +127,7 @@ export function useCamera({
 
   const capture = useCallback((): ImageData | null => {
     const video = videoRef.current;
-    if (!video || video.readyState < 2) return null;
+    if (!video || video.readyState < 2 || !video.videoWidth || !video.videoHeight) return null;
     const canvas = document.createElement('canvas');
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
@@ -130,5 +147,8 @@ export function useCamera({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  return { videoRef, status, error, start, stop, capture };
+  return useMemo(
+    () => ({ videoRef, status, error, hasStream, start, stop, capture }),
+    [status, error, hasStream, start, stop, capture],
+  );
 }

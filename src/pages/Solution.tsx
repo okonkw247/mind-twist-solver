@@ -85,7 +85,7 @@ const Solution = () => {
         cube.model.applyMove(n);
       }
       // Reset move history so user-driven step counters stay clean
-      (cube.model as unknown as { _moveHistory: string[] })._moveHistory = [];
+      cube.model.clearMoveHistory();
       cube.setSpeed(prevSpeed);
       cube.bumpVersion();
 
@@ -139,7 +139,7 @@ const Solution = () => {
       for (const n of inverseNotations) {
         cube.model.applyMove(n);
       }
-      (cube.model as unknown as { _moveHistory: string[] })._moveHistory = [];
+      cube.model.clearMoveHistory();
       cube.bumpVersion();
     }
   }, [cube, locationState, moves]);

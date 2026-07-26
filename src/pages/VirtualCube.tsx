@@ -48,9 +48,14 @@ const VirtualCube = () => {
       </header>
 
       <main className="flex-1 flex flex-col">
-        {/* Cube canvas — drag to orbit */}
+        {/* Gesture hint */}
+        <p className="text-center text-xs text-muted-foreground px-4 pb-2">
+          Swipe with one finger to turn a face · two fingers (or right-drag) to rotate the cube
+        </p>
+
+        {/* Cube canvas — fills the stage, hand-controlled */}
         <div
-          className="flex-1 flex items-center justify-center relative"
+          className="flex-1 relative overflow-hidden"
           style={{
             background:
               'radial-gradient(ellipse at center, hsl(var(--secondary) / 0.25), transparent 70%)',
@@ -58,12 +63,20 @@ const VirtualCube = () => {
         >
           <Suspense
             fallback={
-              <div className="w-64 h-64 flex items-center justify-center">
+              <div className="absolute inset-0 flex items-center justify-center">
                 <div className="w-12 h-12 border-4 border-primary/30 border-t-primary rounded-full animate-spin" />
               </div>
             }
           >
-            <CubeRenderer3D size={320} interactive enableInputs={false} autoRotateIdle={false} />
+            <div className="absolute inset-0 flex items-center justify-center">
+              <CubeRenderer3D
+                size="100%"
+                interactive
+                enableInputs
+                gestureMode="turn-primary"
+                autoRotateIdle={false}
+              />
+            </div>
           </Suspense>
         </div>
 

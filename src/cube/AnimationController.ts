@@ -158,11 +158,12 @@ export class AnimationController {
         reject(new Error('Cannot execute move while animating'));
         return;
       }
-      const prevOnComplete = this.callbacks.onMoveComplete;
+      const originalCallbacks = { ...this.callbacks };
       const wrappedCb: AnimationCallbacks = {
-        ...this.callbacks,
+        ...originalCallbacks,
         onMoveComplete: (m, r) => {
-          prevOnComplete?.(m, r);
+          this.callbacks = originalCallbacks;
+          originalCallbacks.onMoveComplete?.(m, r);
           resolve();
         },
       };
