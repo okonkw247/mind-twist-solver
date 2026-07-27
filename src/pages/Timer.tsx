@@ -11,6 +11,7 @@ import {
   AlertCircle,
   Hand,
   Settings as SettingsIcon,
+  RotateCw,
 } from 'lucide-react';
 import { useWCATimer, formatWCATime, formatTimeWithPenalty } from '@/hooks/useWCATimer';
 import { generateScramble } from '@/lib/kociembaSolver';
@@ -94,6 +95,27 @@ const Timer = () => {
 
   useEffect(() => {
     setScramble(generateScramble(20));
+  }, []);
+
+  // Lock to landscape where supported (installed PWA / fullscreen contexts).
+  // Regular browser tabs and iOS Safari can't do this — the rotate-prompt
+  // overlay below covers those cases instead.
+  useEffect(() => {
+    const orientation = (screen as any).orientation;
+    if (orientation?.lock) {
+      orientation.lock('landscape').catch(() => {
+        // Not supported outside fullscreen/standalone — expected, ignore.
+      });
+    }
+    return () => {
+      if (orientation?.unlock) {
+        try {
+          orientation.unlock();
+        } catch {
+          // ignore
+        }
+      }
+    };
   }, []);
 
   const clearHoldTimers = () => {
@@ -279,44 +301,52 @@ const Timer = () => {
 
   return (
     <div className="fixed inset-0 bg-background flex flex-col overflow-hidden">
-      <header className="flex items-center justify-between px-4 py-2 safe-top shrink-0">
-        <button onClick={() => navigate('/home')} className="btn-icon" aria-label="Back">
-          <ArrowLeft className="w-5 h-5" />
+      {/* Rotate-device fallback for browsers/devices that can't auto-lock orientation */}
+      <div className="hidden [@media(orientation:portrait)]:flex fixed inset-0 z-[100] bg-background flex-col items-center justify-center gap-4 text-center px-8">
+        <RotateCw className="w-12 h-12 text-primary animate-pulse" />
+        <p className="text-lg font-semibold">Rotate your device</p>
+        <p className="text-sm text-muted-foreground">This timer works best in landscape mode</p>
+      </div>
+      <header className="flex items-center justify-between gap-3 px-6 py-3 safe-top shrink-0">
+        <button onClick={() => navigate('/home')} className="btn-icon shrink-0" aria-label="Back">
+          <ArrowLeft className="w-6 h-6" />
         </button>
-        <div className="flex-1 mx-3 min-w-0">
-          <div className="flex items-center gap-2">
-            <span className="text-[10px] text-muted-foreground uppercase tracking-wider shrink-0">
+        <div className="flex-1 min-w-0 bg-secondary/40 rounded-xl px-4 py-2">
+          <div className="flex items-center gap-3">
+            <span className="text-xs text-muted-foreground uppercase tracking-wider shrink-0 font-semibold">
               Scramble
             </span>
-            <p className="font-mono text-xs truncate">{scramble}</p>
+            <p className="font-mono text-sm truncate">{scramble}</p>
             <button
               onClick={newScramble}
-              className="p-1.5 rounded-lg hover:bg-secondary transition-colors shrink-0"
+              className="p-2 rounded-lg hover:bg-secondary transition-colors shrink-0 ml-auto"
               aria-label="New scramble"
             >
-              <RefreshCw className="w-3.5 h-3.5" />
+              <RefreshCw className="w-4 h-4" />
             </button>
           </div>
         </div>
-        <button
-          onClick={() => setShowSettings(true)}
-          className="btn-icon"
-          aria-label="Timer settings"
-        >
-          <SettingsIcon className="w-5 h-5" />
-        </button>
-        <button
-          onClick={() => setShowRecords(true)}
-          className="btn-icon relative ml-1"
-          aria-label="Records"
-        >
-          <Trophy className="w-5 h-5" />
-          {records.length > 0 && (
-            <span className="absolute -top-1 -right-1 min-w-5 h-5 px-1 bg-primary text-[10px] rounded-full flex items-center justify-center font-bold">
-              {records.length > 99 ? '99+' : records.length}
-            </span>
-          )}
-        </button>
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            onClick={() => setShowSettings(true)}
+            className="btn-icon"
+            aria-label="Timer settings"
+          >
+            <SettingsIcon className="w-6 h-6" />
+          </button>
+          <button
+            onClick={() => setShowRecords(true)}
+            className="btn-icon relative"
+            aria-label="Records"
+          >
+            <Trophy className="w-6 h-6" />
+            {records.length > 0 && (
+              <span className="absolute -top-1 -right-1 min-w-5 h-5 px-1 bg-primary text-[10px] rounded-full flex items-center justify-center font-bold">
+                {records.length > 99 ? '99+' : records.length}
+              </span>
+            )}
+          </button>
+        </div>
       </header>
 
       <AnimatePresence>
