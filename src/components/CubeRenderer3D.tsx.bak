@@ -5,26 +5,21 @@
  * Every cubie is a permanent, stable child of one root group. Each cubie
  * independently checks whether ITS OWN (pre-move) position falls inside the
  * currently-animating layer, and if so applies an extra temporary rotation
- * on top of its own base orientation.
- *
- * Gesture model:
- *  - One-finger drag STARTING ON A STICKER: raycast picks the sticker's
- *    cubie + local face normal. On release, we compare the screen-space
- *    drag vector against the two candidate world axes that layer can turn
- *    on, and enqueue the correct real move (U/D/L/R/F/B, possibly primed).
- *  - One-finger drag on empty space: does nothing (OrbitControls ignores
- *    single-finger touch entirely — see `touches` below).
- *  - Two-finger drag / right-mouse-drag: orbits the camera only, never
- *    turns the cube. Pinch also zooms.
+ * on top of its own base orientation. This avoids any unmount/remount
+ * churn — which was previously happening on every single move, since
+ * moving a JSX element between two different parent <group>s forces React
+ * to destroy and recreate it even with a stable `key`. That churn is what
+ * caused cubies/colors to visibly break apart or flicker during fast
+ * multi-move sequences (like a full solve playing back rapidly).
  */
 
 import { useRef, useMemo, memo, forwardRef, useEffect, useCallback } from 'react';
-import { Canvas, useFrame, useThree, type ThreeEvent } from '@react-three/fiber';
+import { Canvas, useFrame } from '@react-three/fiber';
 import { OrbitControls, RoundedBox } from '@react-three/drei';
 import * as THREE from 'three';
 import { useCubeContext } from '@/cube/CubeProvider';
 import { useCubeSettings } from '@/cube/CubeSettings';
-import type { Cubie, ColorName, Vec3, Mat3 } from '@/cube/CubeModel';
+import type { Cubie, ColorName, Vec3 } from '@/cube/CubeModel';
 import type { AnimationFrame } from '@/cube/AnimationController';
 
 const PLANE_GEO = new THREE.PlaneGeometry(0.88, 0.88);
@@ -44,7 +39,7 @@ const FACELET_MATS: Record<ColorName, THREE.MeshStandardMaterial> = {
   green:  new THREE.MeshStandardMaterial({ color: '#009E60', roughness: 0.55, metalness: 0.05 }),
 };
 
-function mat3ToQuaternion(m: Mat3): THREE.Quaternion {
+function mat3ToQuaternion(m: import('@/cube/CubeModel').Mat3): THREE.Quaternion {
   const m4 = new THREE.Matrix4();
   m4.set(
     m[0], m[1], m[2], 0,
@@ -55,14 +50,6 @@ function mat3ToQuaternion(m: Mat3): THREE.Quaternion {
   const q = new THREE.Quaternion();
   q.setFromRotationMatrix(m4);
   return q;
-}
-
-function transformVec3(m: Mat3, v: Vec3): Vec3 {
-  return [
-    m[0] * v[0] + m[1] * v[1] + m[2] * v[2],
-    m[3] * v[0] + m[4] * v[1] + m[5] * v[2],
-    m[6] * v[0] + m[7] * v[1] + m[8] * v[2],
-  ];
 }
 
 const FACELET_ROTATIONS: Record<string, [number, number, number]> = {
@@ -82,34 +69,16 @@ const FACE_AXIS_MAP: Record<string, THREE.Vector3> = {
 
 const FACE_LAYER_INDEX: Record<string, number> = { x: 0, y: 1, z: 2 };
 
-// Mirrors CubeModel.ts's FACE_AXIS / FACE_LAYER, inverted for lookup.
-const AXIS_LAYER_TO_FACE: Record<string, string> = {
-  '0,1': 'R', '0,-1': 'L',
-  '1,1': 'U', '1,-1': 'D',
-  '2,1': 'F', '2,-1': 'B',
-};
-// Mirrors CubeModel.ts's parseMove cwSign convention.
-const FACE_CW_SIGN: Record<string, number> = { R: -1, U: -1, F: -1, L: 1, D: 1, B: 1 };
-
 function isInAnimLayer(pos: Vec3, axis: string, layerValue: number): boolean {
   return Math.round(pos[FACE_LAYER_INDEX[axis]]) === layerValue;
-}
-
-interface DragState {
-  candidateAxes: [number, number];
-  layerValues: [number, number];
-  worldPoint: THREE.Vector3;
-  startX: number;
-  startY: number;
 }
 
 interface CubieMeshProps {
   cubie: Cubie;
   animFrameRef: React.RefObject<AnimationFrame | null>;
-  onFaceletPointerDown: (e: ThreeEvent<PointerEvent>, cubie: Cubie, dirKey: string) => void;
 }
 
-const CubieMesh = memo(({ cubie, animFrameRef, onFaceletPointerDown }: CubieMeshProps) => {
+const CubieMesh = memo(({ cubie, animFrameRef }: CubieMeshProps) => {
   const offset = 0.502;
   const groupRef = useRef<THREE.Group>(null);
 
@@ -120,18 +89,11 @@ const CubieMesh = memo(({ cubie, animFrameRef, onFaceletPointerDown }: CubieMesh
       const pos: [number, number, number] = [lx * offset, ly * offset, lz * offset];
       const rotation = FACELET_ROTATIONS[dirKey] || [0, 0, 0];
       result.push(
-        <mesh
-          key={dirKey}
-          position={pos}
-          rotation={rotation}
-          geometry={PLANE_GEO}
-          material={FACELET_MATS[color]}
-          onPointerDown={(e) => onFaceletPointerDown(e, cubie, dirKey)}
-        />,
+        <mesh key={dirKey} position={pos} rotation={rotation} geometry={PLANE_GEO} material={FACELET_MATS[color]} />,
       );
     });
     return result;
-  }, [cubie.localColors, cubie, onFaceletPointerDown]);
+  }, [cubie.localColors]);
 
   useFrame(() => {
     const g = groupRef.current;
@@ -139,6 +101,10 @@ const CubieMesh = memo(({ cubie, animFrameRef, onFaceletPointerDown }: CubieMesh
 
     const animFrame = animFrameRef.current;
     const basePos = new THREE.Vector3(cubie.position[0], cubie.position[1], cubie.position[2]);
+    // Computed fresh every frame (cheap plain math) instead of memoized —
+    // memoizing this was the actual bug: it froze each cubie's rotation
+    // at whatever it was on first mount, since nothing was forcing a
+    // React re-render anymore once we fixed the performance issue.
     const baseQuat = mat3ToQuaternion(cubie.orientation);
 
     if (animFrame && isInAnimLayer(cubie.position, animFrame.axis, animFrame.layerValue)) {
@@ -166,98 +132,16 @@ interface SceneProps {
   animFrameRef: React.RefObject<AnimationFrame | null>;
   interactive: boolean;
   autoRotateIdle: boolean;
-  inputsOn: boolean;
-  enqueue: (moves: string | string[]) => void;
 }
 
-function projectAxisScreenDir(
-  p0: THREE.Vector3,
-  dirWorld: THREE.Vector3,
-  camera: THREE.Camera,
-  rect: DOMRect,
-): { x: number; y: number } {
-  const p1 = p0.clone().addScaledVector(dirWorld, 0.4);
-  const toScreen = (p: THREE.Vector3) => {
-    const v = p.clone().project(camera);
-    return {
-      x: rect.left + (v.x * 0.5 + 0.5) * rect.width,
-      y: rect.top + (1 - (v.y * 0.5 + 0.5)) * rect.height,
-    };
-  };
-  const s0 = toScreen(p0);
-  const s1 = toScreen(p1);
-  return { x: s1.x - s0.x, y: s1.y - s0.y };
-}
-
-const CubeSceneInner = ({ cubies, animFrameRef, interactive, autoRotateIdle, inputsOn, enqueue }: SceneProps) => {
+const CubeSceneInner = ({ cubies, animFrameRef, interactive, autoRotateIdle }: SceneProps) => {
   const cubeRootRef = useRef<THREE.Group>(null);
-  const { camera, gl } = useThree();
-  const dragRef = useRef<DragState | null>(null);
 
   useFrame((_, delta) => {
     if (cubeRootRef.current && autoRotateIdle && !animFrameRef.current) {
       cubeRootRef.current.rotation.y += delta * 0.35;
     }
   });
-
-  const onFaceletPointerDown = useCallback(
-    (e: ThreeEvent<PointerEvent>, cubie: Cubie, dirKey: string) => {
-      if (!inputsOn) return;
-      e.stopPropagation();
-      const [lx, ly, lz] = dirKey.split(',').map(Number) as Vec3;
-      const worldNormal = transformVec3(cubie.orientation, [lx, ly, lz]).map((v) => Math.round(v));
-      const axisOfNormal = worldNormal.findIndex((v) => v !== 0);
-      const candidateAxes = [0, 1, 2].filter((a) => a !== axisOfNormal) as [number, number];
-      dragRef.current = {
-        candidateAxes,
-        layerValues: [
-          Math.round(cubie.position[candidateAxes[0]]),
-          Math.round(cubie.position[candidateAxes[1]]),
-        ],
-        worldPoint: e.point.clone(),
-        startX: e.clientX,
-        startY: e.clientY,
-      };
-    },
-    [inputsOn],
-  );
-
-  useEffect(() => {
-    const onUp = (e: PointerEvent) => {
-      const drag = dragRef.current;
-      dragRef.current = null;
-      if (!drag) return;
-      const dx = e.clientX - drag.startX;
-      const dy = e.clientY - drag.startY;
-      if (Math.hypot(dx, dy) < 18) return; // too small — treat as a tap, ignore
-
-      const rect = gl.domElement.getBoundingClientRect();
-      const dirs = drag.candidateAxes.map((axis) => {
-        const dirWorld = new THREE.Vector3();
-        dirWorld.setComponent(axis, 1);
-        if (cubeRootRef.current) dirWorld.transformDirection(cubeRootRef.current.matrixWorld);
-        return projectAxisScreenDir(drag.worldPoint, dirWorld, camera, rect);
-      });
-
-      const dot0 = dirs[0].x * dx + dirs[0].y * dy;
-      const dot1 = dirs[1].x * dx + dirs[1].y * dy;
-      const mag0 = Math.hypot(dirs[0].x, dirs[0].y) || 1;
-      const mag1 = Math.hypot(dirs[1].x, dirs[1].y) || 1;
-      const pickIdx = Math.abs(dot0) / mag0 >= Math.abs(dot1) / mag1 ? 0 : 1;
-
-      const axis = drag.candidateAxes[pickIdx];
-      const layerValue = drag.layerValues[pickIdx];
-      const sign = (pickIdx === 0 ? dot0 : dot1) > 0 ? 1 : -1;
-      const face = AXIS_LAYER_TO_FACE[`${axis},${layerValue}`];
-      if (!face) return;
-
-      const cwSign = FACE_CW_SIGN[face];
-      const notation = sign === cwSign ? face : `${face}'`;
-      enqueue(notation);
-    };
-    window.addEventListener('pointerup', onUp);
-    return () => window.removeEventListener('pointerup', onUp);
-  }, [camera, gl, enqueue]);
 
   return (
     <>
@@ -267,7 +151,7 @@ const CubeSceneInner = ({ cubies, animFrameRef, interactive, autoRotateIdle, inp
 
       <group ref={cubeRootRef} rotation={autoRotateIdle ? [0.45, 0, 0] : [0.45, -0.55, 0]}>
         {cubies.map((c) => (
-          <CubieMesh key={c.id} cubie={c} animFrameRef={animFrameRef} onFaceletPointerDown={onFaceletPointerDown} />
+          <CubieMesh key={c.id} cubie={c} animFrameRef={animFrameRef} />
         ))}
       </group>
 
@@ -282,8 +166,7 @@ const CubeSceneInner = ({ cubies, animFrameRef, interactive, autoRotateIdle, inp
           dampingFactor={0.1}
           rotateSpeed={0.8}
           enableDamping={false}
-          touches={{ TWO: THREE.TOUCH.DOLLY_ROTATE }}
-          mouseButtons={{ RIGHT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.DOLLY }}
+          touches={{ ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN }}
         />
       )}
     </>
@@ -291,11 +174,10 @@ const CubeSceneInner = ({ cubies, animFrameRef, interactive, autoRotateIdle, inp
 };
 
 interface CubeRenderer3DProps {
-  size?: number | string;
+  size?: number;
   interactive?: boolean;
   autoRotateIdle?: boolean;
   enableInputs?: boolean;
-  gestureMode?: string;
 }
 
 const CubeRenderer3D = forwardRef<HTMLDivElement, CubeRenderer3DProps>(
@@ -320,10 +202,36 @@ const CubeRenderer3D = forwardRef<HTMLDivElement, CubeRenderer3DProps>(
       return () => window.removeEventListener('keydown', handler);
     }, [inputsOn, enqueue]);
 
+    const swipeStart = useRef<{ x: number; y: number } | null>(null);
+    const onPointerDown = useCallback((e: React.PointerEvent) => {
+      if (e.button !== 0) return;
+      swipeStart.current = { x: e.clientX, y: e.clientY };
+    }, []);
+    const onPointerUp = useCallback(
+      (e: React.PointerEvent) => {
+        const start = swipeStart.current;
+        swipeStart.current = null;
+        if (!start || !inputsOn) return;
+        const dx = e.clientX - start.x;
+        const dy = e.clientY - start.y;
+        const ax = Math.abs(dx);
+        const ay = Math.abs(dy);
+        const THRESHOLD = 32;
+        if (Math.max(ax, ay) < THRESHOLD) return;
+        let move: string;
+        if (ax > ay) move = dx > 0 ? 'U' : "U'";
+        else move = dy < 0 ? 'R' : "R'";
+        enqueue(move);
+      },
+      [inputsOn, enqueue],
+    );
+
     return (
       <div
         ref={ref}
         style={{ width: size, height: size }}
+        onPointerDown={inputsOn ? onPointerDown : undefined}
+        onPointerUp={inputsOn ? onPointerUp : undefined}
         className={
           interactive
             ? 'cursor-grab active:cursor-grabbing touch-none select-none'
@@ -341,8 +249,6 @@ const CubeRenderer3D = forwardRef<HTMLDivElement, CubeRenderer3DProps>(
             animFrameRef={animFrameRef}
             interactive={interactive}
             autoRotateIdle={idle}
-            inputsOn={inputsOn}
-            enqueue={enqueue}
           />
         </Canvas>
       </div>
