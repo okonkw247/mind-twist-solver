@@ -6,15 +6,29 @@ import {
   Timer as TimerIcon,
   Box,
   Grid3x3,
-  Puzzle,
+  ChevronRight,
+  Sparkles,
 } from 'lucide-react';
 
-const tiles = [
-  { label: 'Manual Input', icon: Grid3x3, path: '/manual-input' },
-  { label: 'Camera Input', icon: Camera, path: '/camera' },
-  { label: 'Virtual Cube', icon: Box, path: '/virtual-cube' },
-  { label: 'Cube Timer', icon: TimerIcon, path: '/timer' },
-  { label: 'Settings', icon: SettingsIcon, path: '/settings' },
+const primaryActions = [
+  {
+    label: 'Manual Input',
+    description: 'Paint each face by hand',
+    icon: Grid3x3,
+    path: '/manual-input',
+  },
+  {
+    label: 'Camera Input',
+    description: 'Scan your cube in real time',
+    icon: Camera,
+    path: '/camera',
+  },
+];
+
+const secondaryActions = [
+  { label: 'Virtual Cube', description: 'Practice & scramble', icon: Box, path: '/virtual-cube' },
+  { label: 'Cube Timer', description: 'WCA hand timer', icon: TimerIcon, path: '/timer' },
+  { label: 'Settings', description: 'Speed & rotation', icon: SettingsIcon, path: '/settings' },
 ];
 
 const Home = () => {
@@ -22,75 +36,77 @@ const Home = () => {
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
-      <header className="pt-10 pb-6 text-center">
+      <header className="pt-12 pb-8 px-4 text-center">
+        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-primary/40 bg-primary/10 text-primary text-xs font-semibold mb-4">
+          <Sparkles className="w-3.5 h-3.5" />
+          Professional cube solver
+        </div>
         <h1
-          className="text-6xl font-black tracking-tight"
-          style={{
-            color: 'hsl(140, 80%, 50%)',
-            textShadow: '0 4px 0 #000, 0 0 18px hsl(140 80% 50% / 0.45)',
-            WebkitTextStroke: '2px #000',
-          }}
+          className="text-5xl font-extrabold tracking-tight text-primary"
+          style={{ textShadow: '0 0 34px hsl(var(--primary) / 0.35)' }}
         >
           CubeX
         </h1>
+        <p className="text-sm text-muted-foreground mt-3 max-w-sm mx-auto">
+          Scan, solve and learn any 3x3 cube with step-by-step guidance.
+        </p>
       </header>
 
-      <main className="flex-1 px-4 max-w-xl mx-auto w-full pb-12">
-        <div className="rounded-2xl bg-card border border-border overflow-hidden">
-          <div className="flex items-center gap-2 px-4 py-3 border-b border-border">
-            <Box className="w-4 h-4 text-muted-foreground" />
-            <span className="text-sm font-semibold text-muted-foreground">Solve</span>
-          </div>
+      <main className="flex-1 px-4 max-w-xl mx-auto w-full pb-16">
+        <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3">
+          Start a solve
+        </p>
 
-          <div className="grid grid-cols-2">
-            {tiles.slice(0, 2).map((t, i) => (
-              <Tile key={t.path} {...t} onClick={() => navigate(t.path)} index={i} divideRight={i === 0} />
-            ))}
-          </div>
+        <div className="space-y-3">
+          {primaryActions.map((action, i) => (
+            <motion.button
+              key={action.path}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: i * 0.05 }}
+              onClick={() => navigate(action.path)}
+              className="w-full flex items-center gap-4 rounded-2xl border-2 border-primary/40 bg-card px-5 py-5 text-left hover:border-primary transition-colors active:scale-[0.99]"
+              style={{ boxShadow: '0 0 26px hsl(var(--primary) / 0.10)' }}
+            >
+              <div className="w-12 h-12 rounded-xl bg-primary/15 text-primary flex items-center justify-center shrink-0">
+                <action.icon className="w-6 h-6" />
+              </div>
+              <div className="flex-1">
+                <span className="block font-bold text-lg leading-tight">{action.label}</span>
+                <span className="block text-sm text-muted-foreground">{action.description}</span>
+              </div>
+              <ChevronRight className="w-5 h-5 text-muted-foreground" />
+            </motion.button>
+          ))}
         </div>
 
-        <div className="grid grid-cols-2 gap-3 mt-3">
-          {tiles.slice(2).map((t, i) => (
-            <button
-              key={t.path}
-              onClick={() => navigate(t.path)}
-              className="aspect-square rounded-2xl bg-card border border-border flex flex-col items-center justify-center gap-3 hover:bg-secondary/40 active:scale-[0.98] transition-all"
+        <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mt-8 mb-3">
+          Tools
+        </p>
+
+        <div className="grid grid-cols-2 gap-3">
+          {secondaryActions.map((action, i) => (
+            <motion.button
+              key={action.path}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.1 + i * 0.05 }}
+              onClick={() => navigate(action.path)}
+              className="rounded-2xl bg-card border border-border p-5 flex flex-col gap-3 text-left hover:border-primary/50 transition-colors active:scale-[0.98]"
             >
-              <t.icon className="w-12 h-12" strokeWidth={1.8} />
-              <span className="font-bold text-lg">{t.label}</span>
-            </button>
+              <action.icon className="w-8 h-8 text-primary" strokeWidth={1.9} />
+              <div>
+                <span className="block font-bold leading-tight">{action.label}</span>
+                <span className="block text-xs text-muted-foreground mt-0.5">
+                  {action.description}
+                </span>
+              </div>
+            </motion.button>
           ))}
         </div>
       </main>
     </div>
   );
 };
-
-const Tile = ({
-  label,
-  icon: Icon,
-  onClick,
-  index,
-  divideRight,
-}: {
-  label: string;
-  icon: React.ElementType;
-  onClick: () => void;
-  index: number;
-  divideRight?: boolean;
-}) => (
-  <motion.button
-    initial={{ opacity: 0, y: 8 }}
-    animate={{ opacity: 1, y: 0 }}
-    transition={{ delay: index * 0.04 }}
-    onClick={onClick}
-    className={`py-10 flex flex-col items-center justify-center gap-3 hover:bg-secondary/40 active:scale-[0.98] transition-all ${
-      divideRight ? 'border-r border-border' : ''
-    }`}
-  >
-    <Icon className="w-12 h-12" strokeWidth={1.8} />
-    <span className="font-bold text-lg">{label}</span>
-  </motion.button>
-);
 
 export default Home;
