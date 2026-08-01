@@ -17,8 +17,8 @@
     --popover-foreground: 210 20% 98%;
 
     /* Primary — calm slate-blue, no neon */
-    --primary: 217 91% 60%;
-    --primary-foreground: 0 0% 100%;
+    --primary: 187 92% 55%;
+    --primary-foreground: 200 40% 8%;
 
     /* Secondary — surface panel */
     --secondary: 220 14% 16%;
@@ -28,15 +28,15 @@
     --muted-foreground: 215 16% 65%;
 
     /* Accent — same family, slightly desaturated */
-    --accent: 217 91% 60%;
-    --accent-foreground: 0 0% 100%;
+    --accent: 187 92% 55%;
+    --accent-foreground: 200 40% 8%;
 
     --destructive: 0 72% 55%;
     --destructive-foreground: 0 0% 100%;
 
     --border: 220 14% 20%;
     --input: 220 14% 20%;
-    --ring: 217 91% 60%;
+    --ring: 187 92% 55%;
 
     --radius: 0.875rem;
 
@@ -56,12 +56,12 @@
 
     --sidebar-background: 220 14% 11%;
     --sidebar-foreground: 210 20% 98%;
-    --sidebar-primary: 217 91% 60%;
+    --sidebar-primary: 187 92% 55%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 217 91% 60%;
+    --sidebar-accent: 187 92% 55%;
     --sidebar-accent-foreground: 0 0% 100%;
     --sidebar-border: 220 14% 20%;
-    --sidebar-ring: 217 91% 60%;
+    --sidebar-ring: 187 92% 55%;
   }
 }
 
@@ -118,11 +118,11 @@
   }
 
   .btn-primary:hover {
-    background: hsl(217 91% 55%);
+    background: hsl(187 92% 62%);
   }
 
   .btn-primary:active {
-    background: hsl(217 91% 50%);
+    background: hsl(187 92% 48%);
   }
 
   .btn-primary:disabled {
