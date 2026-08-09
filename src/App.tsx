@@ -20,6 +20,7 @@ import LevelComplete from "./pages/LevelComplete";
 import Settings from "./pages/Settings";
 import Profile from "./pages/Profile";
 import VirtualCube from "./pages/VirtualCube";
+import Tutorials from "./pages/Tutorials";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
