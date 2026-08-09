@@ -69,6 +69,7 @@ const AppContent = () => {
       <Route path="/premium" element={<Premium />} />
       <Route path="/timer" element={<Timer />} />
       <Route path="/virtual-cube" element={<VirtualCube />} />
+      <Route path="/tutorials" element={<Tutorials />} />
       <Route path="/collection" element={<Collection />} />
       <Route path="/level-complete" element={<LevelComplete />} />
       <Route path="/settings" element={<Settings />} />
