@@ -95,19 +95,6 @@ const Index = () => {
           />
         </motion.div>
 
-        {/* Premium Badge */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.8 }}
-          className="mt-8 text-center"
-        >
-          <button
-            onClick={() => navigate('/premium')}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/10 backdrop-blur-sm border border-white/20 text-white/80 text-sm hover:bg-white/20 transition-colors"
-          >
-            <Sparkles className="w-4 h-4 text-yellow-400" />
-            Unlock all features with Premium
           </button>
         </motion.div>
       </main>

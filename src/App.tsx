@@ -13,10 +13,7 @@ import Home from "./pages/Home";
 import ManualInput from "./pages/ManualInput";
 import CameraInput from "./pages/CameraInput";
 import Solution from "./pages/Solution";
-import Premium from "./pages/Premium";
 import Timer from "./pages/Timer";
-import Collection from "./pages/Collection";
-import LevelComplete from "./pages/LevelComplete";
 import Settings from "./pages/Settings";
 import Profile from "./pages/Profile";
 import VirtualCube from "./pages/VirtualCube";
@@ -65,11 +62,8 @@ const AppContent = () => {
       <Route path="/manual-input" element={<ManualInput />} />
       <Route path="/camera" element={<CameraInput />} />
       <Route path="/solution" element={<Solution />} />
-      <Route path="/premium" element={<Premium />} />
       <Route path="/timer" element={<Timer />} />
       <Route path="/virtual-cube" element={<VirtualCube />} />
-      <Route path="/collection" element={<Collection />} />
-      <Route path="/level-complete" element={<LevelComplete />} />
       <Route path="/settings" element={<Settings />} />
       <Route path="/profile" element={<Profile />} />
       <Route path="/camera" element={<CameraInput />} />

@@ -8,7 +8,6 @@ const menuItems = [
   { icon: Puzzle, label: 'Cube Solver', path: '/manual-input' },
   { icon: Clock, label: 'Timer', path: '/timer' },
   { icon: BookOpen, label: 'Tutorials', path: '/tutorials', premium: true },
-  { icon: Crown, label: 'Upgrade to Premium', path: '/premium', highlight: true },
   { icon: Settings, label: 'Settings', path: '/settings', premium: true },
   { icon: Info, label: 'About', path: '/about', premium: true },
   { icon: Mail, label: 'Contact', path: '/contact', premium: true },
