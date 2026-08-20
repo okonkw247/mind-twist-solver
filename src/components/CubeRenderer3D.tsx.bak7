@@ -1,0 +1,327 @@
+/**
+ * CubeRenderer3D — Reads from CubeProvider context and renders 3D cube.
+ *
+ * Gesture model:
+ *  - One-finger drag: orbits the camera around the cube (view only,
+ *    cube itself never turns from this).
+ *  - Pinch/scroll zoom is DISABLED — zoom is controlled only via the
+ *    imperative API below (zoomIn/zoomOut/resetView/viewFront), wired
+ *    to the CameraControls buttons on the page.
+ */
+
+import { useRef, useMemo, memo, forwardRef, useEffect, useImperativeHandle } from 'react';
+import { Canvas, useFrame, useThree } from '@react-three/fiber';
+import { OrbitControls, RoundedBox, ContactShadows } from '@react-three/drei';
+import * as THREE from 'three';
+import { useCubeContext } from '@/cube/CubeProvider';
+import { useCubeSettings } from '@/cube/CubeSettings';
+import type { Cubie, ColorName, Vec3, Mat3 } from '@/cube/CubeModel';
+import type { AnimationFrame } from '@/cube/AnimationController';
+
+const PLANE_GEO = new THREE.PlaneGeometry(0.88, 0.88);
+
+const BODY_MAT = new THREE.MeshPhysicalMaterial({
+  color: '#050505',
+  roughness: 0.35,
+  metalness: 0.1,
+  clearcoat: 0.6,
+  clearcoatRoughness: 0.25,
+});
+
+const FACELET_MATS: Record<ColorName, THREE.MeshPhysicalMaterial> = {
+  white:  new THREE.MeshPhysicalMaterial({ color: '#F8F8F8', roughness: 0.3, metalness: 0.04, clearcoat: 1, clearcoatRoughness: 0.12 }),
+  yellow: new THREE.MeshPhysicalMaterial({ color: '#FFD500', roughness: 0.3, metalness: 0.04, clearcoat: 1, clearcoatRoughness: 0.12 }),
+  red:    new THREE.MeshPhysicalMaterial({ color: '#C41E3A', roughness: 0.3, metalness: 0.04, clearcoat: 1, clearcoatRoughness: 0.12 }),
+  orange: new THREE.MeshPhysicalMaterial({ color: '#FF5800', roughness: 0.3, metalness: 0.04, clearcoat: 1, clearcoatRoughness: 0.12 }),
+  blue:   new THREE.MeshPhysicalMaterial({ color: '#0051BA', roughness: 0.3, metalness: 0.04, clearcoat: 1, clearcoatRoughness: 0.12 }),
+  green:  new THREE.MeshPhysicalMaterial({ color: '#009E60', roughness: 0.3, metalness: 0.04, clearcoat: 1, clearcoatRoughness: 0.12 }),
+};
+
+function mat3ToQuaternion(m: Mat3): THREE.Quaternion {
+  const m4 = new THREE.Matrix4();
+  m4.set(
+    m[0], m[1], m[2], 0,
+    m[3], m[4], m[5], 0,
+    m[6], m[7], m[8], 0,
+    0,    0,    0,    1,
+  );
+  const q = new THREE.Quaternion();
+  q.setFromRotationMatrix(m4);
+  return q;
+}
+
+const FACELET_ROTATIONS: Record<string, [number, number, number]> = {
+  '0,0,1':  [0, 0, 0],
+  '0,0,-1': [0, Math.PI, 0],
+  '0,1,0':  [-Math.PI / 2, 0, 0],
+  '0,-1,0': [Math.PI / 2, 0, 0],
+  '1,0,0':  [0, Math.PI / 2, 0],
+  '-1,0,0': [0, -Math.PI / 2, 0],
+};
+
+const FACE_AXIS_MAP: Record<string, THREE.Vector3> = {
+  x: new THREE.Vector3(1, 0, 0),
+  y: new THREE.Vector3(0, 1, 0),
+  z: new THREE.Vector3(0, 0, 1),
+};
+
+const FACE_LAYER_INDEX: Record<string, number> = { x: 0, y: 1, z: 2 };
+
+function isInAnimLayer(pos: Vec3, axis: string, layerValue: number): boolean {
+  return Math.round(pos[FACE_LAYER_INDEX[axis]]) === layerValue;
+}
+
+interface CubieMeshProps {
+  cubie: Cubie;
+  animFrameRef: React.RefObject<AnimationFrame | null>;
+}
+
+const CubieMesh = memo(({ cubie, animFrameRef }: CubieMeshProps) => {
+  const offset = 0.502;
+  const groupRef = useRef<THREE.Group>(null);
+
+  const facelets = useMemo(() => {
+    const result: JSX.Element[] = [];
+    cubie.localColors.forEach((color, dirKey) => {
+      const [lx, ly, lz] = dirKey.split(',').map(Number);
+      const pos: [number, number, number] = [lx * offset, ly * offset, lz * offset];
+      const rotation = FACELET_ROTATIONS[dirKey] || [0, 0, 0];
+      result.push(
+        <mesh key={dirKey} position={pos} rotation={rotation} geometry={PLANE_GEO} material={FACELET_MATS[color]} />,
+      );
+    });
+    return result;
+  }, [cubie.localColors]);
+
+  useFrame(() => {
+    const g = groupRef.current;
+    if (!g) return;
+
+    const animFrame = animFrameRef.current;
+    const basePos = new THREE.Vector3(cubie.position[0], cubie.position[1], cubie.position[2]);
+    const baseQuat = mat3ToQuaternion(cubie.orientation);
+
+    if (animFrame && isInAnimLayer(cubie.position, animFrame.axis, animFrame.layerValue)) {
+      const axisVec = FACE_AXIS_MAP[animFrame.axis];
+      const turnQuat = new THREE.Quaternion().setFromAxisAngle(axisVec, animFrame.currentAngle);
+      g.position.copy(basePos.applyQuaternion(turnQuat));
+      g.quaternion.copy(turnQuat).multiply(baseQuat);
+    } else {
+      g.position.copy(basePos);
+      g.quaternion.copy(baseQuat);
+    }
+  });
+
+  return (
+    <group ref={groupRef} castShadow receiveShadow>
+      <RoundedBox args={[0.96, 0.96, 0.96]} radius={0.1} smoothness={6} material={BODY_MAT} castShadow receiveShadow />
+      {facelets}
+    </group>
+  );
+});
+CubieMesh.displayName = 'CubieMesh';
+
+const DEFAULT_CAM_POS = new THREE.Vector3(8, 6.5, 8);
+const FRONT_CAM_POS = new THREE.Vector3(0, 0, 11);
+const TOP_CAM_POS = new THREE.Vector3(0, 11, 0.01);
+const MIN_DIST = 3;
+const MAX_DIST = 26;
+
+export interface CubeRenderer3DHandle {
+  zoomIn: () => void;
+  zoomOut: () => void;
+  resetView: () => void;
+  viewFront: () => void;
+  viewTop: () => void;
+}
+
+interface CameraApiRef {
+  zoomIn: () => void;
+  zoomOut: () => void;
+  resetView: () => void;
+  viewFront: () => void;
+  viewTop: () => void;
+}
+
+interface SceneProps {
+  cubies: readonly Cubie[];
+  animFrameRef: React.RefObject<AnimationFrame | null>;
+  interactive: boolean;
+  autoRotateIdle: boolean;
+  apiRef: React.MutableRefObject<CameraApiRef | null>;
+}
+
+const CubeSceneInner = ({ cubies, animFrameRef, interactive, autoRotateIdle, apiRef }: SceneProps) => {
+  const cubeRootRef = useRef<THREE.Group>(null);
+  const controlsRef = useRef<any>(null);
+  const { camera } = useThree();
+
+  useEffect(() => {
+    apiRef.current = {
+      zoomIn: () => {
+        const controls = controlsRef.current;
+        if (!controls) return;
+        const dir = camera.position.clone().sub(controls.target);
+        const dist = Math.max(MIN_DIST, dir.length() * 0.8);
+        camera.position.copy(controls.target).add(dir.normalize().multiplyScalar(dist));
+        controls.update();
+      },
+      zoomOut: () => {
+        const controls = controlsRef.current;
+        if (!controls) return;
+        const dir = camera.position.clone().sub(controls.target);
+        const dist = Math.min(MAX_DIST, dir.length() * 1.25);
+        camera.position.copy(controls.target).add(dir.normalize().multiplyScalar(dist));
+        controls.update();
+      },
+      resetView: () => {
+        const controls = controlsRef.current;
+        camera.position.copy(DEFAULT_CAM_POS);
+        controls?.target.set(0, 0, 0);
+        controls?.update();
+      },
+      viewFront: () => {
+        const controls = controlsRef.current;
+        camera.position.copy(FRONT_CAM_POS);
+        controls?.target.set(0, 0, 0);
+        controls?.update();
+      },
+      viewTop: () => {
+        const controls = controlsRef.current;
+        camera.position.copy(TOP_CAM_POS);
+        controls?.target.set(0, 0, 0);
+        controls?.update();
+      },
+    };
+  }, [camera, apiRef]);
+
+  useFrame((_, delta) => {
+    if (cubeRootRef.current && autoRotateIdle && !animFrameRef.current) {
+      cubeRootRef.current.rotation.y += delta * 0.35;
+    }
+  });
+
+  return (
+    <>
+      <ambientLight intensity={0.45} />
+      <directionalLight
+        position={[8, 12, 6]}
+        intensity={1.6}
+        color="#fff8ef"
+        castShadow
+        shadow-mapSize-width={1024}
+        shadow-mapSize-height={1024}
+        shadow-camera-left={-8}
+        shadow-camera-right={8}
+        shadow-camera-top={8}
+        shadow-camera-bottom={-8}
+      />
+      <directionalLight position={[-6, -2, -8]} intensity={0.35} color="#cce0ff" />
+      <directionalLight position={[0, -6, 4]} intensity={0.25} color="#a0c4ff" />
+
+      <group ref={cubeRootRef} rotation={autoRotateIdle ? [0.45, 0, 0] : [0.45, -0.55, 0]}>
+        {cubies.map((c) => (
+          <CubieMesh key={c.id} cubie={c} animFrameRef={animFrameRef} />
+        ))}
+      </group>
+
+      <ContactShadows
+        position={[0, -1.9, 0]}
+        opacity={0.55}
+        scale={12}
+        blur={2.2}
+        far={4}
+        resolution={256}
+        color="#000000"
+      />
+
+      {interactive && (
+        <OrbitControls
+          ref={controlsRef}
+          enableZoom={false}
+          enablePan={false}
+          minDistance={MIN_DIST}
+          maxDistance={MAX_DIST}
+          minPolarAngle={0.05}
+          maxPolarAngle={Math.PI - 0.05}
+          dampingFactor={0.12}
+          rotateSpeed={1.6}
+          enableDamping={false}
+          touches={{ ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.ROTATE }}
+          mouseButtons={{ LEFT: THREE.MOUSE.ROTATE, RIGHT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.ROTATE }}
+        />
+      )}
+    </>
+  );
+};
+
+interface CubeRenderer3DProps {
+  size?: number | string;
+  interactive?: boolean;
+  autoRotateIdle?: boolean;
+  enableInputs?: boolean;
+  gestureMode?: string;
+}
+
+const CubeRenderer3D = forwardRef<CubeRenderer3DHandle, CubeRenderer3DProps>(
+  ({ size = 260, interactive = true, autoRotateIdle, enableInputs }, ref) => {
+    const { cubies, animFrameRef, enqueue } = useCubeContext();
+    const { idleAutoRotate } = useCubeSettings();
+    const apiRef = useRef<CameraApiRef | null>(null);
+
+    const inputsOn = enableInputs ?? interactive;
+    const idle = autoRotateIdle ?? (!interactive && idleAutoRotate);
+
+    useImperativeHandle(ref, () => ({
+      zoomIn: () => apiRef.current?.zoomIn(),
+      zoomOut: () => apiRef.current?.zoomOut(),
+      resetView: () => apiRef.current?.resetView(),
+      viewFront: () => apiRef.current?.viewFront(),
+      viewTop: () => apiRef.current?.viewTop(),
+    }), []);
+
+    useEffect(() => {
+      if (!inputsOn) return;
+      const handler = (e: KeyboardEvent) => {
+        if (e.target && (e.target as HTMLElement).tagName === 'INPUT') return;
+        const key = e.key.toUpperCase();
+        if (!'RULDFB'.includes(key)) return;
+        const move = e.shiftKey ? `${key}'` : key;
+        enqueue(move);
+        e.preventDefault();
+      };
+      window.addEventListener('keydown', handler);
+      return () => window.removeEventListener('keydown', handler);
+    }, [inputsOn, enqueue]);
+
+    return (
+      <div
+        style={{ width: size, height: size }}
+        className={
+          interactive
+            ? 'cursor-grab active:cursor-grabbing touch-none select-none'
+            : 'pointer-events-none select-none'
+        }
+      >
+        <Canvas
+          camera={{ position: [8, 6.5, 8], fov: 40 }}
+          gl={{ antialias: true, powerPreference: 'high-performance' }}
+          dpr={[1, 2]}
+          shadows
+        >
+          <CubeSceneInner
+            cubies={cubies}
+            animFrameRef={animFrameRef}
+            interactive={interactive}
+            autoRotateIdle={idle}
+            apiRef={apiRef}
+          />
+        </Canvas>
+      </div>
+    );
+  },
+);
+
+CubeRenderer3D.displayName = 'CubeRenderer3D';
+
+export default CubeRenderer3D;

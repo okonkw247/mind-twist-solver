@@ -7,7 +7,8 @@
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, MoreVertical, Play, Square } from 'lucide-react';
-import CubeRenderer3D from '@/components/CubeRenderer3D';
+import CubeRenderer3D, { type CubeRenderer3DHandle } from '@/components/CubeRenderer3D';
+import CameraControls from '@/components/CameraControls';
 import AdvancedSolverModal from '@/components/AdvancedSolverModal';
 import { useCubeContext } from '@/cube/CubeProvider';
 import { generateScramble, parseSolution } from '@/lib/kociembaSolver';
@@ -15,6 +16,7 @@ import { generateScramble, parseSolution } from '@/lib/kociembaSolver';
 const VirtualCube = () => {
   const navigate = useNavigate();
   const cube = useCubeContext();
+  const cubeRendererRef = useRef<CubeRenderer3DHandle>(null);
   const [solverOpen, setSolverOpen] = useState(false);
 
   const [timerRunning, setTimerRunning] = useState(false);
@@ -105,8 +107,19 @@ const VirtualCube = () => {
               </div>
             }
           >
+            <div className="absolute top-3 right-3 z-10">
+              <CameraControls
+                compact
+                onZoomIn={() => cubeRendererRef.current?.zoomIn()}
+                onZoomOut={() => cubeRendererRef.current?.zoomOut()}
+                onReset={() => cubeRendererRef.current?.resetView()}
+                onViewFront={() => cubeRendererRef.current?.viewFront()}
+                onViewTop={() => cubeRendererRef.current?.viewTop()}
+              />
+            </div>
             <div className="absolute inset-0 flex items-center justify-center">
               <CubeRenderer3D
+                ref={cubeRendererRef}
                 size="100%"
                 interactive
                 enableInputs

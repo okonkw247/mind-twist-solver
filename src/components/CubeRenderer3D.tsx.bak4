@@ -1,15 +1,18 @@
 /**
  * CubeRenderer3D — Reads from CubeProvider context and renders 3D cube.
  *
- * Gesture model:
- *  - One-finger drag: orbits the camera around the cube (view only,
- *    cube itself never turns from this).
- *  - Pinch/scroll zoom is DISABLED — zoom is controlled only via the
- *    imperative API below (zoomIn/zoomOut/resetView/viewFront), wired
- *    to the CameraControls buttons on the page.
+ * Gesture model (physical-toy style, true 3D tracking):
+ *  - One-finger drag STARTING ON A STICKER: locks onto one of the two
+ *    valid rotation axes for that face (via an initial screen-direction
+ *    comparison), then tracks the LIVE angle by raycasting the pointer
+ *    onto the actual 3D rotation plane and measuring the signed angle
+ *    swept around the axis — so the layer's rotation matches exactly
+ *    where your finger physically is, not a flattened 2D approximation.
+ *  - Two-finger drag / pinch: orbits the camera and zooms — never turns
+ *    the cube.
  */
 
-import { useRef, useMemo, memo, forwardRef, useEffect, useImperativeHandle, useCallback } from 'react';
+import { useRef, useMemo, memo, forwardRef, useEffect, useCallback } from 'react';
 import { Canvas, useFrame, useThree, type ThreeEvent } from '@react-three/fiber';
 import { OrbitControls, RoundedBox } from '@react-three/drei';
 import * as THREE from 'three';
@@ -22,17 +25,17 @@ const PLANE_GEO = new THREE.PlaneGeometry(0.88, 0.88);
 
 const BODY_MAT = new THREE.MeshStandardMaterial({
   color: '#0a0a0a',
-  roughness: 0.5,
-  metalness: 0.1,
+  roughness: 0.78,
+  metalness: 0.08,
 });
 
 const FACELET_MATS: Record<ColorName, THREE.MeshStandardMaterial> = {
-  white:  new THREE.MeshStandardMaterial({ color: '#FAFAFA', roughness: 0.4, metalness: 0.02 }),
-  yellow: new THREE.MeshStandardMaterial({ color: '#FFDE00', roughness: 0.4, metalness: 0.02 }),
-  red:    new THREE.MeshStandardMaterial({ color: '#E0201A', roughness: 0.4, metalness: 0.02 }),
-  orange: new THREE.MeshStandardMaterial({ color: '#FF7A00', roughness: 0.4, metalness: 0.02 }),
-  blue:   new THREE.MeshStandardMaterial({ color: '#0057D9', roughness: 0.4, metalness: 0.02 }),
-  green:  new THREE.MeshStandardMaterial({ color: '#00B04F', roughness: 0.4, metalness: 0.02 }),
+  white:  new THREE.MeshStandardMaterial({ color: '#F8F8F8', roughness: 0.55, metalness: 0.05 }),
+  yellow: new THREE.MeshStandardMaterial({ color: '#FFD500', roughness: 0.55, metalness: 0.05 }),
+  red:    new THREE.MeshStandardMaterial({ color: '#C41E3A', roughness: 0.55, metalness: 0.05 }),
+  orange: new THREE.MeshStandardMaterial({ color: '#FF5800', roughness: 0.55, metalness: 0.05 }),
+  blue:   new THREE.MeshStandardMaterial({ color: '#0051BA', roughness: 0.55, metalness: 0.05 }),
+  green:  new THREE.MeshStandardMaterial({ color: '#009E60', roughness: 0.55, metalness: 0.05 }),
 };
 
 function mat3ToQuaternion(m: Mat3): THREE.Quaternion {
@@ -81,9 +84,9 @@ const AXIS_LAYER_TO_FACE: Record<string, string> = {
 };
 const FACE_CW_SIGN: Record<string, number> = { R: -1, U: -1, F: -1, L: 1, D: 1, B: 1 };
 
-const DRAG_LOCK_THRESHOLD = 10; // px before we commit to an axis
-const DRAG_SENSITIVITY = 110;   // px per radian
-const MAX_DRAG_ANGLE = Math.PI; // clamp — one gesture maxes at a half turn
+function isInAnimLayer(pos: Vec3, axis: string, layerValue: number): boolean {
+  return Math.round(pos[FACE_LAYER_INDEX[axis]]) === layerValue;
+}
 
 interface LiveFrame {
   axis: 'x' | 'y' | 'z';
@@ -100,12 +103,10 @@ interface DragState {
   locked: boolean;
   lockedAxis: 'x' | 'y' | 'z' | null;
   lockedLayerValue: number;
-  screenDir: { x: number; y: number } | null;
 }
 
-function isInAnimLayer(pos: Vec3, axis: string, layerValue: number): boolean {
-  return Math.round(pos[FACE_LAYER_INDEX[axis]]) === layerValue;
-}
+const DRAG_LOCK_THRESHOLD = 10; // px before we commit to an axis
+const MAX_DRAG_TURNS = 2;       // clamp — one gesture maxes at a half turn
 
 interface CubieMeshProps {
   cubie: Cubie;
@@ -159,34 +160,12 @@ const CubieMesh = memo(({ cubie, animFrameRef, dragFrameRef, onFaceletPointerDow
 
   return (
     <group ref={groupRef}>
-      <RoundedBox args={[0.90, 0.90, 0.90]} radius={0.22} smoothness={6} material={BODY_MAT} />
+      <RoundedBox args={[0.96, 0.96, 0.96]} radius={0.1} smoothness={6} material={BODY_MAT} />
       {facelets}
     </group>
   );
 });
 CubieMesh.displayName = 'CubieMesh';
-
-const DEFAULT_CAM_POS = new THREE.Vector3(8, 6.5, 8);
-const FRONT_CAM_POS = new THREE.Vector3(0, 0, 11);
-const TOP_CAM_POS = new THREE.Vector3(0, 11, 0.01);
-const MIN_DIST = 3;
-const MAX_DIST = 26;
-
-export interface CubeRenderer3DHandle {
-  zoomIn: () => void;
-  zoomOut: () => void;
-  resetView: () => void;
-  viewFront: () => void;
-  viewTop: () => void;
-}
-
-interface CameraApiRef {
-  zoomIn: () => void;
-  zoomOut: () => void;
-  resetView: () => void;
-  viewFront: () => void;
-  viewTop: () => void;
-}
 
 interface SceneProps {
   cubies: readonly Cubie[];
@@ -194,58 +173,39 @@ interface SceneProps {
   interactive: boolean;
   autoRotateIdle: boolean;
   inputsOn: boolean;
-  apiRef: React.MutableRefObject<CameraApiRef | null>;
+  isAnimating: boolean;
+  applyMoveDirect: (notation: string) => void;
 }
 
-const CubeSceneInner = ({ cubies, animFrameRef, interactive, autoRotateIdle, inputsOn, apiRef }: SceneProps) => {
+function projectAxisScreenDir(
+  p0: THREE.Vector3,
+  dirWorld: THREE.Vector3,
+  camera: THREE.Camera,
+  rect: DOMRect,
+): { x: number; y: number } {
+  const p1 = p0.clone().addScaledVector(dirWorld, 0.4);
+  const toScreen = (p: THREE.Vector3) => {
+    const v = p.clone().project(camera);
+    return {
+      x: rect.left + (v.x * 0.5 + 0.5) * rect.width,
+      y: rect.top + (1 - (v.y * 0.5 + 0.5)) * rect.height,
+    };
+  };
+  const s0 = toScreen(p0);
+  const s1 = toScreen(p1);
+  return { x: s1.x - s0.x, y: s1.y - s0.y };
+}
+
+const CubeSceneInner = ({ cubies, animFrameRef, interactive, autoRotateIdle, inputsOn, isAnimating, applyMoveDirect }: SceneProps) => {
   const cubeRootRef = useRef<THREE.Group>(null);
-  const controlsRef = useRef<any>(null);
   const { camera, gl } = useThree();
-
-  const { isAnimating, model, bumpVersion } = useCubeContext();
-
   const dragRef = useRef<DragState | null>(null);
   const dragFrameRef = useRef<LiveFrame | null>(null);
   const settleRafRef = useRef<number | null>(null);
-
-  useEffect(() => {
-    apiRef.current = {
-      zoomIn: () => {
-        const controls = controlsRef.current;
-        if (!controls) return;
-        const dir = camera.position.clone().sub(controls.target);
-        const dist = Math.max(MIN_DIST, dir.length() * 0.8);
-        camera.position.copy(controls.target).add(dir.normalize().multiplyScalar(dist));
-        controls.update();
-      },
-      zoomOut: () => {
-        const controls = controlsRef.current;
-        if (!controls) return;
-        const dir = camera.position.clone().sub(controls.target);
-        const dist = Math.min(MAX_DIST, dir.length() * 1.25);
-        camera.position.copy(controls.target).add(dir.normalize().multiplyScalar(dist));
-        controls.update();
-      },
-      resetView: () => {
-        const controls = controlsRef.current;
-        camera.position.copy(DEFAULT_CAM_POS);
-        controls?.target.set(0, 0, 0);
-        controls?.update();
-      },
-      viewFront: () => {
-        const controls = controlsRef.current;
-        camera.position.copy(FRONT_CAM_POS);
-        controls?.target.set(0, 0, 0);
-        controls?.update();
-      },
-      viewTop: () => {
-        const controls = controlsRef.current;
-        camera.position.copy(TOP_CAM_POS);
-        controls?.target.set(0, 0, 0);
-        controls?.update();
-      },
-    };
-  }, [camera, apiRef]);
+  const raycasterRef = useRef(new THREE.Raycaster());
+  const v0Ref = useRef<THREE.Vector3 | null>(null);
+  const planeRef = useRef(new THREE.Plane());
+  const worldAxisRef = useRef(new THREE.Vector3());
 
   useFrame((_, delta) => {
     if (cubeRootRef.current && autoRotateIdle && !animFrameRef.current && !dragFrameRef.current) {
@@ -256,14 +216,7 @@ const CubeSceneInner = ({ cubies, animFrameRef, interactive, autoRotateIdle, inp
   const onFaceletPointerDown = useCallback(
     (e: ThreeEvent<PointerEvent>, cubie: Cubie, dirKey: string) => {
       if (!inputsOn || isAnimating || dragRef.current) return;
-      if (e.button !== 0) return; // Only trigger for left-clicks/primary touch
       e.stopPropagation();
-
-      // Temporarily disable OrbitControls to prevent camera rotation during face drag
-      if (controlsRef.current) {
-        controlsRef.current.enabled = false;
-      }
-
       const [lx, ly, lz] = dirKey.split(',').map(Number) as Vec3;
       const worldNormal = transformVec3(cubie.orientation, [lx, ly, lz]).map((v) => Math.round(v));
       const axisOfNormal = worldNormal.findIndex((v) => v !== 0);
@@ -280,20 +233,29 @@ const CubeSceneInner = ({ cubies, animFrameRef, interactive, autoRotateIdle, inp
         locked: false,
         lockedAxis: null,
         lockedLayerValue: 0,
-        screenDir: null,
       };
     },
     [inputsOn, isAnimating],
   );
 
+  const getPointerWorldOnAxisPlane = useCallback(
+    (clientX: number, clientY: number, worldAxis: THREE.Vector3): THREE.Vector3 | null => {
+      const rect = gl.domElement.getBoundingClientRect();
+      const ndc = new THREE.Vector2(
+        ((clientX - rect.left) / rect.width) * 2 - 1,
+        -(((clientY - rect.top) / rect.height) * 2 - 1),
+      );
+      raycasterRef.current.setFromCamera(ndc, camera);
+      planeRef.current.setFromNormalAndCoplanarPoint(worldAxis, new THREE.Vector3(0, 0, 0));
+      const out = new THREE.Vector3();
+      const hit = raycasterRef.current.ray.intersectPlane(planeRef.current, out);
+      return hit ? out : null;
+    },
+    [camera, gl],
+  );
+
   useEffect(() => {
-    const settle = (
-      from: number,
-      targetTurns: number,
-      axis: 'x' | 'y' | 'z',
-      layerValue: number,
-      notation: string | null,
-    ) => {
+    const settle = (from: number, targetTurns: number, axis: 'x' | 'y' | 'z', layerValue: number, notation: string | null) => {
       const target = targetTurns * (Math.PI / 2);
       const start = performance.now();
       const duration = 120;
@@ -306,10 +268,7 @@ const CubeSceneInner = ({ cubies, animFrameRef, interactive, autoRotateIdle, inp
           settleRafRef.current = requestAnimationFrame(step);
         } else {
           dragFrameRef.current = null;
-          if (notation) {
-            model.applyMove(notation);
-            bumpVersion();
-          }
+          if (notation) applyMoveDirect(notation);
         }
       };
       settleRafRef.current = requestAnimationFrame(step);
@@ -338,26 +297,44 @@ const CubeSceneInner = ({ cubies, animFrameRef, interactive, autoRotateIdle, inp
         drag.locked = true;
         drag.lockedAxis = AXIS_NAMES[drag.candidateAxes[pickIdx]];
         drag.lockedLayerValue = drag.layerValues[pickIdx];
-        drag.screenDir = dirs[pickIdx];
+
+        // Build the reference vector v0: the touched point's offset from
+        // the rotation axis, projected onto the plane perpendicular to it.
+        const localAxisVec = FACE_AXIS_MAP[drag.lockedAxis];
+        const worldAxis = localAxisVec.clone();
+        if (cubeRootRef.current) worldAxis.transformDirection(cubeRootRef.current.matrixWorld);
+        worldAxis.normalize();
+        worldAxisRef.current.copy(worldAxis);
+
+        const alongAxis = drag.worldPoint.dot(worldAxis);
+        v0Ref.current = drag.worldPoint.clone().addScaledVector(worldAxis, -alongAxis);
       }
 
-      if (drag.locked && drag.lockedAxis && drag.screenDir) {
-        const mag = Math.hypot(drag.screenDir.x, drag.screenDir.y) || 1;
-        const proj = (drag.screenDir.x * dx + drag.screenDir.y * dy) / mag;
-        const angle = Math.max(-MAX_DRAG_ANGLE, Math.min(MAX_DRAG_ANGLE, -proj / DRAG_SENSITIVITY));
+      if (drag.locked && drag.lockedAxis && v0Ref.current) {
+        const worldAxis = worldAxisRef.current;
+        const hit = getPointerWorldOnAxisPlane(e.clientX, e.clientY, worldAxis);
+        if (!hit) return;
+        const alongAxis = hit.dot(worldAxis);
+        const v1 = hit.clone().addScaledVector(worldAxis, -alongAxis);
+        if (v1.lengthSq() < 1e-6 || v0Ref.current.lengthSq() < 1e-6) return;
+
+        const cross = new THREE.Vector3().crossVectors(v0Ref.current, v1);
+        const dot = v0Ref.current.dot(v1);
+        let angle = Math.atan2(cross.dot(worldAxis), dot);
+
+        const maxAngle = MAX_DRAG_TURNS * (Math.PI / 2);
+        angle = Math.max(-maxAngle, Math.min(maxAngle, angle));
+
         dragFrameRef.current = { axis: drag.lockedAxis, layerValue: drag.lockedLayerValue, currentAngle: angle };
+        window.__cubeDragDebug = `face:${AXIS_LAYER_TO_FACE[`${AXIS_NAMES.indexOf(drag.lockedAxis)},${drag.lockedLayerValue}`]} axis:${drag.lockedAxis} angle:${(angle * 180 / Math.PI).toFixed(0)}deg`;
+        window.__cubeDragDebug = `face:${AXIS_LAYER_TO_FACE[`${AXIS_NAMES.indexOf(drag.lockedAxis)},${drag.lockedLayerValue}`]} axis:${drag.lockedAxis} angle:${(angle * 180 / Math.PI).toFixed(0)}deg`;
       }
     };
 
     const onUp = () => {
       const drag = dragRef.current;
       dragRef.current = null;
-
-      // Re-enable OrbitControls upon drag completion
-      if (controlsRef.current) {
-        controlsRef.current.enabled = true;
-      }
-
+      v0Ref.current = null;
       if (!drag || !drag.locked || !drag.lockedAxis) {
         dragFrameRef.current = null;
         return;
@@ -389,40 +366,33 @@ const CubeSceneInner = ({ cubies, animFrameRef, interactive, autoRotateIdle, inp
       window.removeEventListener('pointerup', onUp);
       if (settleRafRef.current !== null) cancelAnimationFrame(settleRafRef.current);
     };
-  }, [camera, gl, model, bumpVersion]);
+  }, [camera, gl, applyMoveDirect, getPointerWorldOnAxisPlane]);
 
   return (
     <>
-      <ambientLight intensity={0.65} />
-      <directionalLight position={[8, 10, 6]} intensity={1.2} color="#fff8ef" />
-      <directionalLight position={[-6, -4, -8]} intensity={0.35} color="#cce0ff" />
+      <ambientLight intensity={0.6} />
+      <directionalLight position={[8, 10, 6]} intensity={1.3} color="#fff8ef" />
+      <directionalLight position={[-6, -4, -8]} intensity={0.4} color="#cce0ff" />
 
       <group ref={cubeRootRef} rotation={autoRotateIdle ? [0.45, 0, 0] : [0.45, -0.55, 0]}>
         {cubies.map((c) => (
-          <CubieMesh
-            key={c.id}
-            cubie={c}
-            animFrameRef={animFrameRef}
-            dragFrameRef={dragFrameRef}
-            onFaceletPointerDown={onFaceletPointerDown}
-          />
+          <CubieMesh key={c.id} cubie={c} animFrameRef={animFrameRef} dragFrameRef={dragFrameRef} onFaceletPointerDown={onFaceletPointerDown} />
         ))}
       </group>
 
       {interactive && (
         <OrbitControls
-          ref={controlsRef}
-          enableZoom={false}
+          enableZoom={true}
           enablePan={false}
-          minDistance={MIN_DIST}
-          maxDistance={MAX_DIST}
-          minPolarAngle={0.05}
-          maxPolarAngle={Math.PI - 0.05}
-          dampingFactor={0.12}
-          rotateSpeed={1.6}
+          minDistance={2.5}
+          maxDistance={30}
+          minPolarAngle={Math.PI / 6}
+          maxPolarAngle={(Math.PI * 5) / 6}
+          dampingFactor={0.1}
+          rotateSpeed={0.8}
           enableDamping={false}
-          touches={{ ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.ROTATE }}
-          mouseButtons={{ LEFT: THREE.MOUSE.ROTATE, RIGHT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.ROTATE }}
+          touches={{ TWO: THREE.TOUCH.DOLLY_ROTATE }}
+          mouseButtons={{ LEFT: THREE.MOUSE.PAN, RIGHT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.DOLLY }}
         />
       )}
     </>
@@ -437,22 +407,21 @@ interface CubeRenderer3DProps {
   gestureMode?: string;
 }
 
-const CubeRenderer3D = forwardRef<CubeRenderer3DHandle, CubeRenderer3DProps>(
+const CubeRenderer3D = forwardRef<HTMLDivElement, CubeRenderer3DProps>(
   ({ size = 260, interactive = true, autoRotateIdle, enableInputs }, ref) => {
-    const { cubies, animFrameRef, enqueue } = useCubeContext();
+    const { cubies, animFrameRef, enqueue, isAnimating, model, bumpVersion } = useCubeContext();
     const { idleAutoRotate } = useCubeSettings();
-    const apiRef = useRef<CameraApiRef | null>(null);
 
     const inputsOn = enableInputs ?? interactive;
     const idle = autoRotateIdle ?? (!interactive && idleAutoRotate);
 
-    useImperativeHandle(ref, () => ({
-      zoomIn: () => apiRef.current?.zoomIn(),
-      zoomOut: () => apiRef.current?.zoomOut(),
-      resetView: () => apiRef.current?.resetView(),
-      viewFront: () => apiRef.current?.viewFront(),
-      viewTop: () => apiRef.current?.viewTop(),
-    }), []);
+    const applyMoveDirect = useCallback(
+      (notation: string) => {
+        model.applyMove(notation);
+        bumpVersion();
+      },
+      [model, bumpVersion],
+    );
 
     useEffect(() => {
       if (!inputsOn) return;
@@ -470,6 +439,7 @@ const CubeRenderer3D = forwardRef<CubeRenderer3DHandle, CubeRenderer3DProps>(
 
     return (
       <div
+        ref={ref}
         style={{ width: size, height: size }}
         className={
           interactive
@@ -478,9 +448,9 @@ const CubeRenderer3D = forwardRef<CubeRenderer3DHandle, CubeRenderer3DProps>(
         }
       >
         <Canvas
-          camera={{ position: [8, 6.5, 8], fov: 40 }}
+          camera={{ position: [5, 4, 5], fov: 40 }}
           gl={{ antialias: true, powerPreference: 'high-performance' }}
-          dpr={[1, 1.5]}
+          dpr={[1, 2]}
           shadows={false}
         >
           <CubeSceneInner
@@ -489,7 +459,8 @@ const CubeRenderer3D = forwardRef<CubeRenderer3DHandle, CubeRenderer3DProps>(
             interactive={interactive}
             autoRotateIdle={idle}
             inputsOn={inputsOn}
-            apiRef={apiRef}
+            isAnimating={isAnimating}
+            applyMoveDirect={applyMoveDirect}
           />
         </Canvas>
       </div>
@@ -500,3 +471,8 @@ const CubeRenderer3D = forwardRef<CubeRenderer3DHandle, CubeRenderer3DProps>(
 CubeRenderer3D.displayName = 'CubeRenderer3D';
 
 export default CubeRenderer3D;
+
+// Temporary debug hook — remove once gesture math is confirmed correct.
+declare global {
+  interface Window { __cubeDragDebug?: string; }
+}

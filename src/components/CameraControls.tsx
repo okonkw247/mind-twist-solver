@@ -2,7 +2,7 @@
 // Zoom, reset, and view presets for the 3D cube
 
 import { motion } from 'framer-motion';
-import { ZoomIn, ZoomOut, RotateCcw, Eye, Maximize } from 'lucide-react';
+import { ZoomIn, ZoomOut, RotateCcw, Eye, ArrowUp, Maximize } from 'lucide-react';
 
 interface CameraControlsProps {
   onZoomIn?: () => void;
@@ -83,6 +83,18 @@ const CameraControls = ({
         </motion.button>
       )}
       
+      {onViewTop && (
+        <motion.button
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+          onClick={onViewTop}
+          className={buttonClass}
+          title="Top View"
+        >
+          <ArrowUp className={iconClass} />
+        </motion.button>
+      )}
+
       {onFullscreen && (
         <motion.button
           whileHover={{ scale: 1.05 }}
