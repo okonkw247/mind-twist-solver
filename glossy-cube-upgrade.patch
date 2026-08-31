@@ -1,0 +1,51 @@
+--- a/src/components/CubeRenderer3D.tsx
++++ b/src/components/CubeRenderer3D.tsx
+@@ -21,18 +21,18 @@ const PLANE_GEO = new THREE.PlaneGeometry(0.88, 0.88);
+ 
+ const BODY_MAT = new THREE.MeshStandardMaterial({
+-  color: '#0a0a0a',
+-  roughness: 0.5,
+-  metalness: 0.1,
++  color: '#050505',
++  roughness: 0.25,
++  metalness: 0.05,
+ });
+ 
+-const FACELET_MATS: Record<ColorName, THREE.MeshStandardMaterial> = {
+-  white:  new THREE.MeshStandardMaterial({ color: '#FAFAFA', roughness: 0.4, metalness: 0.02 }),
+-  yellow: new THREE.MeshStandardMaterial({ color: '#FFDE00', roughness: 0.4, metalness: 0.02 }),
+-  red:    new THREE.MeshStandardMaterial({ color: '#E0201A', roughness: 0.4, metalness: 0.02 }),
+-  orange: new THREE.MeshStandardMaterial({ color: '#FF7A00', roughness: 0.4, metalness: 0.02 }),
+-  blue:   new THREE.MeshStandardMaterial({ color: '#0057D9', roughness: 0.4, metalness: 0.02 }),
+-  green:  new THREE.MeshStandardMaterial({ color: '#00B04F', roughness: 0.4, metalness: 0.02 }),
++const FACELET_MATS: Record<ColorName, THREE.MeshPhysicalMaterial> = {
++  white:  new THREE.MeshPhysicalMaterial({ color: '#FFFFFF', roughness: 0.12, metalness: 0.0, clearcoat: 1.0, clearcoatRoughness: 0.05 }),
++  yellow: new THREE.MeshPhysicalMaterial({ color: '#FFE600', roughness: 0.12, metalness: 0.0, clearcoat: 1.0, clearcoatRoughness: 0.05 }),
++  red:    new THREE.MeshPhysicalMaterial({ color: '#FF1A1A', roughness: 0.12, metalness: 0.0, clearcoat: 1.0, clearcoatRoughness: 0.05 }),
++  orange: new THREE.MeshPhysicalMaterial({ color: '#FF8C00', roughness: 0.12, metalness: 0.0, clearcoat: 1.0, clearcoatRoughness: 0.05 }),
++  blue:   new THREE.MeshPhysicalMaterial({ color: '#0066FF', roughness: 0.12, metalness: 0.0, clearcoat: 1.0, clearcoatRoughness: 0.05 }),
++  green:  new THREE.MeshPhysicalMaterial({ color: '#00E676', roughness: 0.12, metalness: 0.0, clearcoat: 1.0, clearcoatRoughness: 0.05 }),
+ };
+ 
+ function mat3ToQuaternion(m: Mat3): THREE.Quaternion {
+@@ -162,7 +162,7 @@ const CubieMesh = memo(({ cubie, animFrameRef, dragFrameRef, onFaceletPointerDow
+   return (
+     <group ref={groupRef}>
+-      <RoundedBox args={[0.90, 0.90, 0.90]} radius={0.22} smoothness={6} material={BODY_MAT} />
++      <RoundedBox args={[0.90, 0.90, 0.90]} radius={0.18} smoothness={8} material={BODY_MAT} />
+       {facelets}
+     </group>
+   );
+@@ -394,9 +394,11 @@ const CubeSceneInner = ({ cubies, animFrameRef, interactive, autoRotateIdle, in
+   return (
+     <>
+-      <ambientLight intensity={0.65} />
+-      <directionalLight position={[8, 10, 6]} intensity={1.2} color="#fff8ef" />
+-      <directionalLight position={[-6, -4, -8]} intensity={0.35} color="#cce0ff" />
++      <ambientLight intensity={0.55} />
++      <directionalLight position={[8, 12, 8]} intensity={1.6} color="#fff5e6" />
++      <directionalLight position={[-8, -4, -10]} intensity={0.45} color="#d0e0ff" />
++      <pointLight position={[-6, 8, -6]} intensity={0.6} color="#ffffff" distance={30} />
++      <pointLight position={[6, -6, 6]} intensity={0.3} color="#ffe0b0" distance={30} />
+ 
+       <group ref={cubeRootRef} rotation={autoRotateIdle ? [0.45, 0, 0] : [0.45, -0.55, 0]}>

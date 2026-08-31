@@ -18,21 +18,21 @@ import { useCubeSettings } from '@/cube/CubeSettings';
 import type { Cubie, ColorName, Vec3, Mat3 } from '@/cube/CubeModel';
 import type { AnimationFrame } from '@/cube/AnimationController';
 
-const PLANE_GEO = new THREE.PlaneGeometry(0.88, 0.88);
+const PLANE_GEO = new THREE.PlaneGeometry(0.92, 0.92);
 
 const BODY_MAT = new THREE.MeshStandardMaterial({
-  color: '#0a0a0a',
-  roughness: 0.5,
-  metalness: 0.1,
+  color: '#050505',
+  roughness: 0.25,
+  metalness: 0.05,
 });
 
-const FACELET_MATS: Record<ColorName, THREE.MeshStandardMaterial> = {
-  white:  new THREE.MeshStandardMaterial({ color: '#FAFAFA', roughness: 0.4, metalness: 0.02 }),
-  yellow: new THREE.MeshStandardMaterial({ color: '#FFDE00', roughness: 0.4, metalness: 0.02 }),
-  red:    new THREE.MeshStandardMaterial({ color: '#E0201A', roughness: 0.4, metalness: 0.02 }),
-  orange: new THREE.MeshStandardMaterial({ color: '#FF7A00', roughness: 0.4, metalness: 0.02 }),
-  blue:   new THREE.MeshStandardMaterial({ color: '#0057D9', roughness: 0.4, metalness: 0.02 }),
-  green:  new THREE.MeshStandardMaterial({ color: '#00B04F', roughness: 0.4, metalness: 0.02 }),
+const FACELET_MATS: Record<ColorName, THREE.MeshPhysicalMaterial> = {
+  white:  new THREE.MeshPhysicalMaterial({ color: '#FFFFFF', clearcoat: 1.0, clearcoatRoughness: 0.05, roughness: 0.12, metalness: 0.0 }),
+  yellow: new THREE.MeshPhysicalMaterial({ color: '#FFE600', clearcoat: 1.0, clearcoatRoughness: 0.05, roughness: 0.12, metalness: 0.0 }),
+  red:    new THREE.MeshPhysicalMaterial({ color: '#FF1A1A', clearcoat: 1.0, clearcoatRoughness: 0.05, roughness: 0.12, metalness: 0.0 }),
+  orange: new THREE.MeshPhysicalMaterial({ color: '#FF8C00', clearcoat: 1.0, clearcoatRoughness: 0.05, roughness: 0.12, metalness: 0.0 }),
+  blue:   new THREE.MeshPhysicalMaterial({ color: '#0066FF', clearcoat: 1.0, clearcoatRoughness: 0.05, roughness: 0.12, metalness: 0.0 }),
+  green:  new THREE.MeshPhysicalMaterial({ color: '#00E676', clearcoat: 1.0, clearcoatRoughness: 0.05, roughness: 0.12, metalness: 0.0 }),
 };
 
 function mat3ToQuaternion(m: Mat3): THREE.Quaternion {
@@ -94,13 +94,12 @@ interface LiveFrame {
 interface DragState {
   candidateAxes: [number, number];
   layerValues: [number, number];
-  worldPoint: THREE.Vector3;
+  screenDirs: [{ x: number; y: number }, { x: number; y: number }];
   startX: number;
   startY: number;
   locked: boolean;
   lockedAxis: 'x' | 'y' | 'z' | null;
   lockedLayerValue: number;
-  screenDir: { x: number; y: number } | null;
 }
 
 function isInAnimLayer(pos: Vec3, axis: string, layerValue: number): boolean {
@@ -159,7 +158,7 @@ const CubieMesh = memo(({ cubie, animFrameRef, dragFrameRef, onFaceletPointerDow
 
   return (
     <group ref={groupRef}>
-      <RoundedBox args={[0.90, 0.90, 0.90]} radius={0.22} smoothness={6} material={BODY_MAT} />
+      <RoundedBox args={[0.90, 0.90, 0.90]} radius={0.18} smoothness={8} material={BODY_MAT} />
       {facelets}
     </group>
   );
@@ -195,6 +194,25 @@ interface SceneProps {
   autoRotateIdle: boolean;
   inputsOn: boolean;
   apiRef: React.MutableRefObject<CameraApiRef | null>;
+}
+
+function projectAxisScreenDir(
+  p0: THREE.Vector3,
+  dirWorld: THREE.Vector3,
+  camera: THREE.Camera,
+  rect: DOMRect,
+): { x: number; y: number } {
+  const p1 = p0.clone().addScaledVector(dirWorld, 0.4);
+  const toScreen = (p: THREE.Vector3) => {
+    const v = p.clone().project(camera);
+    return {
+      x: rect.left + (v.x * 0.5 + 0.5) * rect.width,
+      y: rect.top + (1 - (v.y * 0.5 + 0.5)) * rect.height,
+    };
+  };
+  const s0 = toScreen(p0);
+  const s1 = toScreen(p1);
+  return { x: s1.x - s0.x, y: s1.y - s0.y };
 }
 
 const CubeSceneInner = ({ cubies, animFrameRef, interactive, autoRotateIdle, inputsOn, apiRef }: SceneProps) => {
@@ -256,10 +274,10 @@ const CubeSceneInner = ({ cubies, animFrameRef, interactive, autoRotateIdle, inp
   const onFaceletPointerDown = useCallback(
     (e: ThreeEvent<PointerEvent>, cubie: Cubie, dirKey: string) => {
       if (!inputsOn || isAnimating || dragRef.current) return;
-      if (e.button !== 0) return; // Only trigger for left-clicks/primary touch
+      if (e.button !== 0) return;
       e.stopPropagation();
+      (e as any).nativeEvent?.stopImmediatePropagation?.();
 
-      // Temporarily disable OrbitControls to prevent camera rotation during face drag
       if (controlsRef.current) {
         controlsRef.current.enabled = false;
       }
@@ -268,22 +286,42 @@ const CubeSceneInner = ({ cubies, animFrameRef, interactive, autoRotateIdle, inp
       const worldNormal = transformVec3(cubie.orientation, [lx, ly, lz]).map((v) => Math.round(v));
       const axisOfNormal = worldNormal.findIndex((v) => v !== 0);
       const candidateAxes = [0, 1, 2].filter((a) => a !== axisOfNormal) as [number, number];
+
+      const rect = gl.domElement.getBoundingClientRect();
+      const screenDirs = candidateAxes.map((axis) => {
+        const localDir: Vec3 = [0, 0, 0];
+        localDir[axis] = 1;
+        const worldDir = transformVec3(cubie.orientation, localDir);
+        const wDir = new THREE.Vector3(worldDir[0], worldDir[1], worldDir[2]);
+        const p0 = new THREE.Vector3(cubie.position[0], cubie.position[1], cubie.position[2]);
+        const p1 = p0.clone().addScaledVector(wDir, 0.5);
+        const toScreen = (p: THREE.Vector3) => {
+          const v = p.clone().project(camera);
+          return {
+            x: rect.left + (v.x * 0.5 + 0.5) * rect.width,
+            y: rect.top + (1 - (v.y * 0.5 + 0.5)) * rect.height,
+          };
+        };
+        const s0 = toScreen(p0);
+        const s1 = toScreen(p1);
+        return { x: s1.x - s0.x, y: s1.y - s0.y };
+      }) as [{ x: number; y: number }, { x: number; y: number }];
+
       dragRef.current = {
         candidateAxes,
         layerValues: [
           Math.round(cubie.position[candidateAxes[0]]),
           Math.round(cubie.position[candidateAxes[1]]),
         ],
-        worldPoint: e.point.clone(),
+        screenDirs,
         startX: e.clientX,
         startY: e.clientY,
         locked: false,
         lockedAxis: null,
         lockedLayerValue: 0,
-        screenDir: null,
       };
     },
-    [inputsOn, isAnimating],
+    [inputsOn, isAnimating, camera, gl],
   );
 
   useEffect(() => {
@@ -320,16 +358,10 @@ const CubeSceneInner = ({ cubies, animFrameRef, interactive, autoRotateIdle, inp
       if (!drag) return;
       const dx = e.clientX - drag.startX;
       const dy = e.clientY - drag.startY;
-      const rect = gl.domElement.getBoundingClientRect();
 
       if (!drag.locked) {
         if (Math.hypot(dx, dy) < DRAG_LOCK_THRESHOLD) return;
-        const dirs = drag.candidateAxes.map((axis) => {
-          const dirWorld = new THREE.Vector3();
-          dirWorld.setComponent(axis, 1);
-          if (cubeRootRef.current) dirWorld.transformDirection(cubeRootRef.current.matrixWorld);
-          return projectAxisScreenDir(drag.worldPoint, dirWorld, camera, rect);
-        });
+        const dirs = drag.screenDirs;
         const dot0 = dirs[0].x * dx + dirs[0].y * dy;
         const dot1 = dirs[1].x * dx + dirs[1].y * dy;
         const mag0 = Math.hypot(dirs[0].x, dirs[0].y) || 1;
@@ -338,12 +370,14 @@ const CubeSceneInner = ({ cubies, animFrameRef, interactive, autoRotateIdle, inp
         drag.locked = true;
         drag.lockedAxis = AXIS_NAMES[drag.candidateAxes[pickIdx]];
         drag.lockedLayerValue = drag.layerValues[pickIdx];
-        drag.screenDir = dirs[pickIdx];
       }
 
-      if (drag.locked && drag.lockedAxis && drag.screenDir) {
-        const mag = Math.hypot(drag.screenDir.x, drag.screenDir.y) || 1;
-        const proj = (drag.screenDir.x * dx + drag.screenDir.y * dy) / mag;
+      if (drag.locked && drag.lockedAxis) {
+        const dirs = drag.screenDirs;
+        const pickIdx = drag.candidateAxes.indexOf(AXIS_NAMES.indexOf(drag.lockedAxis));
+        const dir = dirs[pickIdx];
+        const mag = Math.hypot(dir.x, dir.y) || 1;
+        const proj = (dir.x * dx + dir.y * dy) / mag;
         const angle = Math.max(-MAX_DRAG_ANGLE, Math.min(MAX_DRAG_ANGLE, -proj / DRAG_SENSITIVITY));
         dragFrameRef.current = { axis: drag.lockedAxis, layerValue: drag.lockedLayerValue, currentAngle: angle };
       }
@@ -389,13 +423,15 @@ const CubeSceneInner = ({ cubies, animFrameRef, interactive, autoRotateIdle, inp
       window.removeEventListener('pointerup', onUp);
       if (settleRafRef.current !== null) cancelAnimationFrame(settleRafRef.current);
     };
-  }, [camera, gl, model, bumpVersion]);
+  }, [model, bumpVersion]);
 
   return (
     <>
-      <ambientLight intensity={0.65} />
-      <directionalLight position={[8, 10, 6]} intensity={1.2} color="#fff8ef" />
-      <directionalLight position={[-6, -4, -8]} intensity={0.35} color="#cce0ff" />
+      <ambientLight intensity={0.55} />
+      <directionalLight position={[8, 12, 8]} intensity={1.6} color="#fff5e6" />
+      <directionalLight position={[-8, -4, -10]} intensity={0.45} color="#d0e0ff" />
+      <pointLight position={[-6, 8, -6]} intensity={0.6} color="#ffffff" distance={30} />
+      <pointLight position={[6, -6, 6]} intensity={0.3} color="#ffe0b0" distance={30} />
 
       <group ref={cubeRootRef} rotation={autoRotateIdle ? [0.45, 0, 0] : [0.45, -0.55, 0]}>
         {cubies.map((c) => (
