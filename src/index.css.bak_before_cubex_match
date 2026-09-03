@@ -7,25 +7,25 @@
 @layer base {
   :root {
     /* Core surfaces — near-black, slightly blue-tinted */
-    --background: 0 0% 15%;
+    --background: 230 22% 15%;
     --foreground: 210 20% 98%;
 
-    --card: 0 0% 9%;
+    --card: 230 22% 20%;
     --card-foreground: 210 20% 98%;
 
-    --popover: 0 0% 9%;
+    --popover: 230 22% 20%;
     --popover-foreground: 210 20% 98%;
 
     /* Primary — electric cyan */
-    --primary: 142 71% 45%;
+    --primary: 120 65% 45%;
     --primary-foreground: 230 30% 6%;
 
     /* Secondary — dark panel with a hint of the primary hue */
-    --secondary: 0 0% 12%;
+    --secondary: 232 20% 24%;
     --secondary-foreground: 210 20% 98%;
 
-    --muted: 0 0% 22%;
-    --muted-foreground: 0 0% 70%;
+    --muted: 232 18% 30%;
+    --muted-foreground: 220 15% 75%;
 
     /* Accent — neon magenta, used for contrast highlights */
     --accent: 300 90% 62%;
@@ -34,9 +34,9 @@
     --destructive: 0 85% 60%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 0 0% 24%;
-    --input: 0 0% 24%;
-    --ring: 142 71% 45%;
+    --border: 232 20% 30%;
+    --input: 232 20% 30%;
+    --ring: 120 65% 45%;
 
     --radius: 0.875rem;
 
@@ -54,14 +54,14 @@
     --purple: 265 85% 65%;
     --magenta: 300 90% 62%;
 
-    --sidebar-background: 0 0% 11%;
+    --sidebar-background: 230 22% 17%;
     --sidebar-foreground: 210 20% 98%;
-    --sidebar-primary: 142 71% 45%;
+    --sidebar-primary: 120 65% 45%;
     --sidebar-primary-foreground: 230 30% 6%;
     --sidebar-accent: 300 90% 62%;
     --sidebar-accent-foreground: 0 0% 100%;
-    --sidebar-border: 0 0% 24%;
-    --sidebar-ring: 142 71% 45%;
+    --sidebar-border: 232 20% 30%;
+    --sidebar-ring: 120 65% 45%;
   }
 }
 

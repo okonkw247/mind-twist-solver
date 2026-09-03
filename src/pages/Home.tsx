@@ -12,6 +12,7 @@ import {
 const tiles = [
   { label: 'Manual Input', icon: Grid3x3, path: '/manual-input' },
   { label: 'Camera Input', icon: Camera, path: '/camera' },
+  { label: 'Pattern Solver', icon: Puzzle, path: '/solution' },
   { label: 'Virtual Cube', icon: Box, path: '/virtual-cube' },
   { label: 'Cube Timer', icon: TimerIcon, path: '/timer' },
   { label: 'Settings', icon: SettingsIcon, path: '/settings' },
@@ -24,14 +25,15 @@ const Home = () => {
     <div className="min-h-screen bg-background flex flex-col">
       <header className="pt-10 pb-6 text-center">
         <h1
-          className="text-6xl font-black tracking-tight"
+          className="text-7xl tracking-tight"
           style={{
-            color: 'hsl(140, 80%, 50%)',
-            textShadow: '0 4px 0 #000, 0 0 18px hsl(140 80% 50% / 0.45)',
-            WebkitTextStroke: '2px #000',
+            color: '#FFD500',
+            textShadow: '0 4px 0 #000, 0 0 18px rgba(255, 213, 0, 0.45)',
+            WebkitTextStroke: '3px #000',
+            fontFamily: "'Luckiest Guy', cursive",
           }}
         >
-          CubeX
+          JSN Cubing
         </h1>
       </header>
 
@@ -51,14 +53,22 @@ const Home = () => {
 
         <div className="grid grid-cols-2 gap-3 mt-3">
           {tiles.slice(2).map((t, i) => (
-            <button
+            <motion.button
               key={t.path}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: (i + 2) * 0.04 }}
               onClick={() => navigate(t.path)}
               className="aspect-square rounded-2xl bg-card border border-border flex flex-col items-center justify-center gap-3 hover:bg-secondary/40 active:scale-[0.98] transition-all"
             >
-              <t.icon className="w-12 h-12" strokeWidth={1.8} />
+              <motion.div
+                animate={{ y: [0, -6, 0] }}
+                transition={{ duration: 2.4, repeat: Infinity, ease: 'easeInOut', delay: (i + 2) * 0.15 }}
+              >
+                <t.icon className="w-12 h-12" strokeWidth={1.8} />
+              </motion.div>
               <span className="font-bold text-lg">{t.label}</span>
-            </button>
+            </motion.button>
           ))}
         </div>
       </main>
@@ -88,7 +98,12 @@ const Tile = ({
       divideRight ? 'border-r border-border' : ''
     }`}
   >
-    <Icon className="w-12 h-12" strokeWidth={1.8} />
+    <motion.div
+      animate={{ y: [0, -6, 0] }}
+      transition={{ duration: 2.4, repeat: Infinity, ease: 'easeInOut', delay: index * 0.15 }}
+    >
+      <Icon className="w-12 h-12" strokeWidth={1.8} />
+    </motion.div>
     <span className="font-bold text-lg">{label}</span>
   </motion.button>
 );

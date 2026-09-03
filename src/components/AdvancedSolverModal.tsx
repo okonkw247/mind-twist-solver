@@ -3,6 +3,7 @@
  * the user one or more solutions. Tap a row to apply that sequence.
  */
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Box, Eye, Loader2, X, AlertTriangle } from 'lucide-react';
 import { getSolutionMoves } from '@/lib/kociembaSolver';
@@ -57,7 +58,7 @@ export default function AdvancedSolverModal({
     };
   }, [open, faceArrays]);
 
-  return (
+  return createPortal(
     <AnimatePresence>
       {open && (
         <>
@@ -72,7 +73,7 @@ export default function AdvancedSolverModal({
             initial={{ opacity: 0, scale: 0.95, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
-            className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[92%] max-w-md z-50 rounded-2xl bg-card border border-border p-5 shadow-2xl"
+            className="fixed inset-x-0 top-6 mx-auto w-[92%] max-w-md z-50 rounded-2xl bg-card border border-border p-5 shadow-2xl"
           >
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-3">
@@ -137,6 +138,7 @@ export default function AdvancedSolverModal({
           </motion.div>
         </>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body,
   );
 }

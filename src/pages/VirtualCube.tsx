@@ -10,6 +10,7 @@ import { ArrowLeft, MoreVertical, Play, Square } from 'lucide-react';
 import CubeRenderer3D, { type CubeRenderer3DHandle } from '@/components/CubeRenderer3D';
 import CameraControls from '@/components/CameraControls';
 import AdvancedSolverModal from '@/components/AdvancedSolverModal';
+import { motion } from 'framer-motion';
 import { useCubeContext } from '@/cube/CubeProvider';
 import { generateScramble, parseSolution } from '@/lib/kociembaSolver';
 
@@ -18,6 +19,18 @@ const VirtualCube = () => {
   const cube = useCubeContext();
   const cubeRendererRef = useRef<CubeRenderer3DHandle>(null);
   const [solverOpen, setSolverOpen] = useState(false);
+
+  // Move-by-move progress tracking for the current scramble/solve operation
+  const progressBaselineRef = useRef(0);
+  const [progressTotal, setProgressTotal] = useState(0);
+  const progressDone = progressTotal > 0
+    ? Math.min(progressTotal, cube.moveHistory.length - progressBaselineRef.current)
+    : 0;
+  useEffect(() => {
+    if (progressTotal > 0 && progressDone >= progressTotal) {
+      setProgressTotal(0);
+    }
+  }, [progressDone, progressTotal]);
 
   const [timerRunning, setTimerRunning] = useState(false);
   const [elapsedMs, setElapsedMs] = useState(0);
@@ -60,6 +73,8 @@ const VirtualCube = () => {
     if (cube.isAnimating) return;
     const scramble = generateScramble(22);
     const moves = parseSolution(scramble).map((m) => m.notation);
+    progressBaselineRef.current = cube.moveHistory.length;
+    setProgressTotal(moves.length);
     cube.enqueue(moves);
   }, [cube]);
 
@@ -69,13 +84,15 @@ const VirtualCube = () => {
 
   const handleApplySolution = useCallback(
     (moves: string[]) => {
+      progressBaselineRef.current = cube.moveHistory.length;
+      setProgressTotal(moves.length);
       cube.enqueue(moves);
     },
     [cube],
   );
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
+    <div className="h-[100dvh] bg-background flex flex-col overflow-y-auto">
       <header className="flex items-center justify-between px-4 py-4 safe-top">
         <button onClick={() => navigate(-1)} className="btn-icon" aria-label="Back">
           <ArrowLeft className="w-6 h-6" />
@@ -87,17 +104,24 @@ const VirtualCube = () => {
       </header>
 
       <main className="flex-1 flex flex-col">
-        {/* Gesture hint */}
-        <p className="text-center text-xs text-muted-foreground px-4 pb-2">
-          Swipe with one finger to turn a face · two fingers (or right-drag) to rotate the cube
-        </p>
+        {/* Scramble/solve progress bar — fills move-by-move, straight line, no loop */}
+        <div className="h-1 mx-4 mb-2 rounded-full bg-secondary/30 overflow-hidden">
+          {progressTotal > 0 && (
+            <motion.div
+              className="h-full bg-primary rounded-full"
+              initial={{ width: 0 }}
+              animate={{ width: `${(progressDone / progressTotal) * 100}%` }}
+              transition={{ duration: 0.3, ease: 'easeOut' }}
+            />
+          )}
+        </div>
 
         {/* Cube canvas — fills the stage, hand-controlled */}
         <div
           className="flex-1 relative overflow-hidden"
           style={{
             background:
-              'radial-gradient(ellipse at center, hsl(var(--secondary) / 0.25), transparent 70%)',
+              'radial-gradient(ellipse at center, hsl(220 20% 14%), hsl(230 25% 6%) 70%)',
           }}
         >
           <Suspense
