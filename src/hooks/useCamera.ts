@@ -24,11 +24,18 @@ export interface UseCameraResult {
   status: CameraStatus;
   error: string | null;
   hasStream: boolean;
+  torchSupported: boolean;
+  torchOn: boolean;
   start: () => Promise<void>;
   stop: () => void;
+  toggleTorch: () => Promise<boolean>;
   /** Capture a still frame as ImageData from current video */
   capture: () => ImageData | null;
 }
+
+type TorchTrack = MediaStreamTrack & {
+  getCapabilities?: () => MediaTrackCapabilities & { torch?: boolean };
+};
 
 export function useCamera({
   autoStart = false,
@@ -41,6 +48,8 @@ export function useCamera({
   const [status, setStatus] = useState<CameraStatus>('idle');
   const [error, setError] = useState<string | null>(null);
   const [hasStream, setHasStream] = useState(false);
+  const [torchSupported, setTorchSupported] = useState(false);
+  const [torchOn, setTorchOn] = useState(false);
 
   const stop = useCallback(() => {
     if (streamRef.current) {
@@ -52,6 +61,8 @@ export function useCamera({
     }
     setHasStream(false);
     setStatus('idle');
+    setTorchSupported(false);
+    setTorchOn(false);
   }, []);
 
   const start = useCallback(async () => {
@@ -72,6 +83,12 @@ export function useCamera({
       setStatus('requesting');
       setError(null);
 
+      if (streamRef.current?.active) {
+        setHasStream(true);
+        setStatus('ready');
+        return;
+      }
+
       let stream: MediaStream;
       try {
         stream = await navigator.mediaDevices.getUserMedia({
@@ -91,6 +108,9 @@ export function useCamera({
       streamRef.current = stream;
       setHasStream(true);
 
+      const videoTrack = stream.getVideoTracks()[0] as TorchTrack | undefined;
+      setTorchSupported(videoTrack?.getCapabilities?.().torch === true);
+
       if (videoRef.current) {
         const video = videoRef.current;
         video.autoplay = true;
@@ -102,6 +122,9 @@ export function useCamera({
         try {
           await video.play();
         } catch (playError) {
+          stream.getTracks().forEach((track) => track.stop());
+          streamRef.current = null;
+          setHasStream(false);
           setStatus('error');
           setError('Camera opened, but video playback was blocked. Tap Enable Camera again.');
           console.warn('Camera video play failed', playError);
@@ -124,6 +147,25 @@ export function useCamera({
       }
     }
   }, [facingMode, width, height]);
+
+  const toggleTorch = useCallback(async () => {
+    const track = streamRef.current?.getVideoTracks()[0] as TorchTrack | undefined;
+    if (!track || !torchSupported) return false;
+
+    const next = !torchOn;
+    try {
+      await track.applyConstraints({
+        advanced: [{ torch: next } as MediaTrackConstraintSet & { torch: boolean }],
+      });
+      setTorchOn(next);
+      return true;
+    } catch (torchError) {
+      console.warn('Camera torch is not available', torchError);
+      setTorchSupported(false);
+      setTorchOn(false);
+      return false;
+    }
+  }, [torchOn, torchSupported]);
 
   const capture = useCallback((): ImageData | null => {
     const video = videoRef.current;
@@ -148,7 +190,18 @@ export function useCamera({
   }, []);
 
   return useMemo(
-    () => ({ videoRef, status, error, hasStream, start, stop, capture }),
-    [status, error, hasStream, start, stop, capture],
+    () => ({
+      videoRef,
+      status,
+      error,
+      hasStream,
+      torchSupported,
+      torchOn,
+      start,
+      stop,
+      toggleTorch,
+      capture,
+    }),
+    [status, error, hasStream, torchSupported, torchOn, start, stop, toggleTorch, capture],
   );
 }
