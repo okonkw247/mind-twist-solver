@@ -13,9 +13,17 @@ const COLOR_MAP: Record<ColorName, string> = {
   green: '#009E60',
 };
 
-export default function LiveSwatchStrip({ colors }: { colors: ColorName[] | null }) {
+export default function LiveSwatchStrip({
+  colors,
+  readable = false,
+}: { colors: ColorName[] | null; readable?: boolean }) {
   return (
-    <div className="grid grid-cols-3 gap-1 w-32 h-32">
+    <div
+      className={`grid grid-cols-3 gap-1 w-32 h-32 rounded-lg p-1 border-2 transition-colors ${
+        readable ? 'border-primary bg-primary/10' : 'border-border bg-card/70'
+      }`}
+      aria-label={readable ? 'Live colors ready to capture' : 'Reading cube colors'}
+    >
       {Array.from({ length: 9 }).map((_, i) => {
         const c = colors?.[i];
         return (

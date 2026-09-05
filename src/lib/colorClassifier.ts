@@ -1,32 +1,31 @@
-/**
- * colorClassifier — Sample 9 sticker colors from a video frame.
- *
- * Uses HSL distance against canonical Rubik's color centers.
- * Robust to varied lighting because hue dominates the metric.
- */
+/** Live Rubik's sticker classifier with confidence gating for camera capture. */
 
 export type ColorName = 'white' | 'yellow' | 'red' | 'orange' | 'blue' | 'green';
 
 interface RGB { r: number; g: number; b: number }
-interface HSL { h: number; s: number; l: number }
+interface HSV { h: number; s: number; v: number }
 
-const COLOR_REFERENCES: Record<ColorName, HSL> = {
-  white:  { h: 0,   s: 0,   l: 95 },
-  yellow: { h: 52,  s: 95,  l: 55 },
-  red:    { h: 0,   s: 85,  l: 50 },
-  orange: { h: 25,  s: 95,  l: 55 },
-  blue:   { h: 220, s: 90,  l: 45 },
-  green:  { h: 130, s: 75,  l: 45 },
+export interface FaceClassification {
+  colors: ColorName[];
+  confidence: number;
+  readable: boolean;
+}
+
+const COLOR_REFERENCES: Record<ColorName, HSV> = {
+  white: { h: 0, s: 0.04, v: 0.95 },
+  yellow: { h: 52, s: 0.95, v: 0.95 },
+  red: { h: 0, s: 0.85, v: 0.77 },
+  orange: { h: 25, s: 0.95, v: 1 },
+  blue: { h: 220, s: 0.98, v: 0.73 },
+  green: { h: 145, s: 1, v: 0.62 },
 };
 
-function rgbToHsl({ r, g, b }: RGB): HSL {
+function rgbToHsv({ r, g, b }: RGB): HSV {
   const rn = r / 255, gn = g / 255, bn = b / 255;
   const max = Math.max(rn, gn, bn), min = Math.min(rn, gn, bn);
-  const l = (max + min) / 2;
-  let h = 0, s = 0;
-  if (max !== min) {
-    const d = max - min;
-    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+  const d = max - min;
+  let h = 0;
+  if (d !== 0) {
     switch (max) {
       case rn: h = ((gn - bn) / d + (gn < bn ? 6 : 0)); break;
       case gn: h = (bn - rn) / d + 2; break;
@@ -34,7 +33,7 @@ function rgbToHsl({ r, g, b }: RGB): HSL {
     }
     h *= 60;
   }
-  return { h, s: s * 100, l: l * 100 };
+  return { h, s: max === 0 ? 0 : d / max, v: max };
 }
 
 function hueDistance(a: number, b: number): number {
@@ -42,56 +41,84 @@ function hueDistance(a: number, b: number): number {
   return d > 180 ? 360 - d : d;
 }
 
-function classifyHsl(hsl: HSL): ColorName {
-  // Whites: very low saturation regardless of hue
-  if (hsl.s < 18 && hsl.l > 60) return 'white';
+function classifyHsv(hsv: HSV): { color: ColorName; confidence: number } {
+  // Low-chroma stickers are white even when the room light is warm.
+  if (hsv.s < 0.2 && hsv.v > 0.42) {
+    return { color: 'white', confidence: Math.min(1, 0.55 + (0.2 - hsv.s) * 1.8) };
+  }
 
   let best: ColorName = 'white';
   let bestScore = Infinity;
+  let secondScore = Infinity;
   for (const name of Object.keys(COLOR_REFERENCES) as ColorName[]) {
     if (name === 'white') continue;
     const ref = COLOR_REFERENCES[name];
-    const dh = hueDistance(hsl.h, ref.h);
-    const ds = Math.abs(hsl.s - ref.s) * 0.3;
-    const dl = Math.abs(hsl.l - ref.l) * 0.2;
-    const score = dh + ds + dl;
-    if (score < bestScore) { bestScore = score; best = name; }
+    const hue = hueDistance(hsv.h, ref.h) / 180;
+    const saturation = Math.abs(hsv.s - ref.s);
+    const brightness = Math.abs(hsv.v - ref.v) * 0.35;
+    const score = hue * 0.7 + saturation * 0.2 + brightness * 0.1;
+    if (score < bestScore) {
+      secondScore = bestScore;
+      bestScore = score;
+      best = name;
+    } else if (score < secondScore) {
+      secondScore = score;
+    }
   }
-  return best;
+
+  const separation = Math.max(0, secondScore - bestScore);
+  return { color: best, confidence: Math.min(1, 0.35 + separation * 2.6) };
 }
 
-/**
- * Sample 9 cells in a 3x3 grid from the central square region of an ImageData.
- * Returns flattened row-major colors.
- */
+/** Backwards-compatible simple classifier. */
 export function classifyFace(image: ImageData): ColorName[] {
+  return classifyFaceDetailed(image).colors;
+}
+
+/** Sample nine center regions and report whether they are safe to capture. */
+export function classifyFaceDetailed(image: ImageData): FaceClassification {
   const { width, height, data } = image;
-  const size = Math.min(width, height) * 0.6; // central 60%
+  const size = Math.min(width, height) * 0.6;
   const startX = (width - size) / 2;
   const startY = (height - size) / 2;
   const cell = size / 3;
-  const sampleHalf = cell * 0.18;
+  const sampleHalf = cell * 0.2;
+  const colors: ColorName[] = [];
+  const confidences: number[] = [];
 
-  const result: ColorName[] = [];
   for (let row = 0; row < 3; row++) {
     for (let col = 0; col < 3; col++) {
       const cx = startX + cell * (col + 0.5);
       const cy = startY + cell * (row + 0.5);
-      let r = 0, g = 0, b = 0, n = 0;
       const x0 = Math.max(0, Math.floor(cx - sampleHalf));
       const x1 = Math.min(width - 1, Math.floor(cx + sampleHalf));
       const y0 = Math.max(0, Math.floor(cy - sampleHalf));
       const y1 = Math.min(height - 1, Math.floor(cy + sampleHalf));
+      let r = 0, g = 0, b = 0, n = 0;
       for (let y = y0; y <= y1; y += 2) {
         for (let x = x0; x <= x1; x += 2) {
-          const idx = (y * width + x) * 4;
-          r += data[idx]; g += data[idx + 1]; b += data[idx + 2]; n++;
+          const index = (y * width + x) * 4;
+          r += data[index];
+          g += data[index + 1];
+          b += data[index + 2];
+          n++;
         }
       }
-      if (n === 0) { result.push('white'); continue; }
-      r /= n; g /= n; b /= n;
-      result.push(classifyHsl(rgbToHsl({ r, g, b })));
+      if (n === 0) {
+        colors.push('white');
+        confidences.push(0);
+        continue;
+      }
+      const result = classifyHsv(rgbToHsv({ r: r / n, g: g / n, b: b / n }));
+      colors.push(result.color);
+      confidences.push(result.confidence);
     }
   }
-  return result;
+
+  const confidence = confidences.reduce((sum, value) => sum + value, 0) / confidences.length;
+  return {
+    colors,
+    confidence,
+    readable: confidences.every((value) => value >= 0.42) && confidence >= 0.58,
+  };
 }
