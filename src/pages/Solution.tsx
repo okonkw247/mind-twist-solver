@@ -40,6 +40,7 @@ const Solution = () => {
   const [copied, setCopied] = useState(false);
   const [learningMode, setLearningMode] = useState(true);
   const [soundEnabled, setSoundEnabled] = useState(false);
+  const cubeRef = useRef<CubeRenderer3DHandle>(null);
 
   const [moves, setMoves] = useState<CubeMove[]>(
     locationState?.solution ?? (locationState?.cubeState ? [] : defaultMoves)
@@ -283,8 +284,8 @@ const Solution = () => {
           animate={{ opacity: 1, scale: 1 }}
           className={`flex justify-center mb-4 rounded-3xl transition-shadow duration-300 ${highlightClass}`}
         >
-          <div className="w-[260px] h-[260px] flex items-center justify-center bg-secondary/20 rounded-2xl text-muted-foreground">
-            3D cube temporarily disabled for testing
+          <div className="w-[260px] h-[260px]">
+            <CubeRenderer3D ref={cubeRef} size={260} interactive={false} autoRotateIdle={false} />
           </div>
         </motion.div>
 
@@ -321,7 +322,12 @@ const Solution = () => {
         <div className="mb-6">
           <SolveControls
             isPlaying={isPlaying}
-            onPlay={() => setIsPlaying(true)}
+            onPlay={async () => {
+              if (cubeRef.current && currentStep === 0) {
+                await cubeRef.current.inspectCube();
+              }
+              setIsPlaying(true);
+            }}
             onPause={() => setIsPlaying(false)}
             onStepForward={handleStepForward}
             onStepBack={handleStepBack}

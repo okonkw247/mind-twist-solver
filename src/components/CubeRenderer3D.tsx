@@ -158,8 +158,18 @@ const CubieMesh = memo(({ cubie, animFrameRef, dragFrameRef }: CubieMeshProps) =
 CubieMesh.displayName = 'CubieMesh';
 
 const DEFAULT_CAM_POS = new THREE.Vector3(8, 6.5, 8);
-const FRONT_CAM_POS = new THREE.Vector3(0, 0, 11);
-const TOP_CAM_POS = new THREE.Vector3(0, 11, 0.01);
+
+// All tour waypoints share one fixed radius so the camera only ORBITS
+// during the inspection tour — never zooms in/out between stops.
+const TOUR_RADIUS = 12;
+function tourDir(x: number, y: number, z: number): THREE.Vector3 {
+  return new THREE.Vector3(x, y, z).normalize().multiplyScalar(TOUR_RADIUS);
+}
+const FRONT_CAM_POS = tourDir(0, 0.15, 1);
+const TOP_CAM_POS = tourDir(0, 1, 0.15);
+const RIGHT_CAM_POS = tourDir(1, 0.15, 0.05);
+const LEFT_CAM_POS = tourDir(-1, 0.15, 0.05);
+const BOTTOM_CAM_POS = tourDir(0, -1, 0.15);
 const MIN_DIST = 3;
 const MAX_DIST = 26;
 
@@ -169,6 +179,7 @@ export interface CubeRenderer3DHandle {
   resetView: () => void;
   viewFront: () => void;
   viewTop: () => void;
+  playInspectionTour: (onComplete?: () => void) => void;
 }
 
 interface CameraApiRef {
@@ -177,6 +188,7 @@ interface CameraApiRef {
   resetView: () => void;
   viewFront: () => void;
   viewTop: () => void;
+  playInspectionTour: (onComplete?: () => void) => void;
 }
 
 interface SceneProps {
@@ -204,10 +216,56 @@ const CubeSceneInner = ({ cubies, animFrameRef, interactive, autoRotateIdle, api
   const cubeRootRef = useRef<THREE.Group>(null);
   const controlsRef = useRef<any>(null);
   const { camera, gl } = useThree();
+  const tourRafRef = useRef<number | null>(null);
   const dragFrameRef = useRef<LiveFrame | null>(null);
 
   useEffect(() => {
+    const animateCameraTo = (target: THREE.Vector3, duration: number, onDone?: () => void) => {
+      const controls = controlsRef.current;
+      const start = camera.position.clone();
+      const startTime = performance.now();
+      const step = (now: number) => {
+        try {
+          const t = Math.min(1, (now - startTime) / duration);
+          const eased = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+          camera.position.lerpVectors(start, target, eased);
+          controls?.update();
+          if (t < 1) {
+            tourRafRef.current = requestAnimationFrame(step);
+          } else {
+            tourRafRef.current = null;
+            onDone?.();
+          }
+        } catch (err) {
+          alert('TOUR STEP ERROR: ' + (err instanceof Error ? err.message : String(err)));
+          tourRafRef.current = null;
+          onDone?.();
+        }
+      };
+      tourRafRef.current = requestAnimationFrame(step);
+    };
+
+    const playInspectionTour = (onComplete?: () => void) => {
+      if (tourRafRef.current !== null) cancelAnimationFrame(tourRafRef.current);
+      const waypoints = [FRONT_CAM_POS, TOP_CAM_POS, RIGHT_CAM_POS, LEFT_CAM_POS, BOTTOM_CAM_POS, DEFAULT_CAM_POS];
+      const HOLD_MS = 550;   // pause at each view, like actually looking it over
+      const MOVE_MS = 900;   // slow, deliberate glide between views
+      let i = 0;
+      const next = () => {
+        if (i >= waypoints.length) { onComplete?.(); return; }
+        const wp = waypoints[i];
+        const isLast = i === waypoints.length - 1;
+        i += 1;
+        animateCameraTo(wp, MOVE_MS, () => {
+          if (isLast) { onComplete?.(); return; }
+          setTimeout(next, HOLD_MS);
+        });
+      };
+      next();
+    };
+
     apiRef.current = {
+      playInspectionTour,
       zoomIn: () => {
         const controls = controlsRef.current;
         if (!controls) return;
@@ -312,6 +370,7 @@ const CubeRenderer3D = forwardRef<CubeRenderer3DHandle, CubeRenderer3DProps>(
       resetView: () => apiRef.current?.resetView(),
       viewFront: () => apiRef.current?.viewFront(),
       viewTop: () => apiRef.current?.viewTop(),
+      playInspectionTour: (onComplete) => apiRef.current?.playInspectionTour(onComplete),
     }), []);
 
     return (

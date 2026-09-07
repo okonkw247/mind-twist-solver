@@ -36,6 +36,16 @@ const VirtualCube = () => {
   const [elapsedMs, setElapsedMs] = useState(0);
   const timerIntervalRef = useRef<number | null>(null);
   const timerStartRef = useRef<number>(0);
+  const [inspected, setInspected] = useState(false);
+
+  // Inspection animation on first load
+  useEffect(() => {
+    if (inspected) return;
+    const timer = setTimeout(() => {
+      cubeRendererRef.current?.inspectCube()?.then(() => setInspected(true));
+    }, 800);
+    return () => clearTimeout(timer);
+  }, [inspected]);
 
   const startTimer = useCallback(() => {
     if (timerRunning) return;
@@ -84,9 +94,11 @@ const VirtualCube = () => {
 
   const handleApplySolution = useCallback(
     (moves: string[]) => {
-      progressBaselineRef.current = cube.moveHistory.length;
-      setProgressTotal(moves.length);
-      cube.enqueue(moves);
+      cubeRendererRef.current?.playInspectionTour(() => {
+        progressBaselineRef.current = cube.moveHistory.length;
+        setProgressTotal(moves.length);
+        cube.enqueue(moves);
+      });
     },
     [cube],
   );
