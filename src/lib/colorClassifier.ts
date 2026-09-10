@@ -42,9 +42,19 @@ function hueDistance(a: number, b: number): number {
 }
 
 function classifyHsv(hsv: HSV): { color: ColorName; confidence: number } {
+  // Dark samples are usually the cube outline, a shadow, or the room behind
+  // the cube. Keep the best guess for the preview, but never call it readable.
+  if (hsv.v < 0.2) {
+    return { color: 'white', confidence: hsv.v * 0.25 };
+  }
+
   // Low-chroma stickers are white even when the room light is warm.
   if (hsv.s < 0.2 && hsv.v > 0.42) {
-    return { color: 'white', confidence: Math.min(1, 0.55 + (0.2 - hsv.s) * 1.8) };
+    const brightnessConfidence = Math.min(1, Math.max(0, (hsv.v - 0.42) / 0.42));
+    return {
+      color: 'white',
+      confidence: Math.min(1, (0.55 + (0.2 - hsv.s) * 1.8) * (0.45 + brightnessConfidence * 0.55)),
+    };
   }
 
   let best: ColorName = 'white';
@@ -67,7 +77,11 @@ function classifyHsv(hsv: HSV): { color: ColorName; confidence: number } {
   }
 
   const separation = Math.max(0, secondScore - bestScore);
-  return { color: best, confidence: Math.min(1, 0.35 + separation * 2.6) };
+  const brightnessConfidence = Math.min(1, Math.max(0, (hsv.v - 0.2) / 0.55));
+  return {
+    color: best,
+    confidence: Math.min(1, (0.35 + separation * 2.6) * (0.35 + brightnessConfidence * 0.65)),
+  };
 }
 
 /** Backwards-compatible simple classifier. */
