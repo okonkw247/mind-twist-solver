@@ -76,11 +76,15 @@ function classifyHsv(hsv: HSV): { color: ColorName; confidence: number } {
     }
   }
 
+  // Score how decisively the best hue wins over the runner-up. A pure ratio
+  // keeps canonical stickers (yellow/orange sit close on the hue wheel)
+  // readable while washed-out real-world samples still stay below the gate.
   const separation = Math.max(0, secondScore - bestScore);
+  const decisiveness = Math.min(3, separation / Math.max(bestScore, 0.02));
   const brightnessConfidence = Math.min(1, Math.max(0, (hsv.v - 0.2) / 0.55));
   return {
     color: best,
-    confidence: Math.min(1, (0.35 + separation * 2.6) * (0.35 + brightnessConfidence * 0.65)),
+    confidence: Math.min(1, (0.35 + decisiveness * 0.45) * (0.35 + brightnessConfidence * 0.65)),
   };
 }
 
