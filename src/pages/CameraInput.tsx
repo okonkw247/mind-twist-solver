@@ -226,25 +226,7 @@ const CameraInput = () => {
             <div className="pointer-events-none absolute inset-0 border-2 border-primary/80 shadow-[0_0_0_1px_hsl(var(--primary)/0.3),0_0_24px_hsl(var(--primary)/0.45)]" />
         </div>
 
-        <div className="mt-4 flex items-center gap-2">
-          {FACES.map((f, i) => (
-            <button
-              key={f}
-              onClick={() => setCurrentFace(i)}
-              className={`w-8 h-8 rounded-md text-xs font-bold transition-colors ${
-                i === currentFace
-                  ? 'bg-white text-black'
-                  : faceColors[i].length === 9
-                  ? 'bg-primary/80 text-white'
-                  : 'bg-white/20 text-white'
-              }`}
-            >
-              {f}
-            </button>
-          ))}
-        </div>
-
-        <p className="mt-3 text-white text-sm font-medium drop-shadow text-center">
+        <p className="mt-4 text-white text-sm font-medium drop-shadow text-center">
           {scanState === 'complete' ? 'All faces captured — preparing your solution' : `Step ${currentFace + 1} / 6 — ${FACE_NAMES[currentFace]} face`}
         </p>
         <div className="mt-3 flex items-center gap-1.5" aria-label={`${completedFaces} of 6 faces captured`}>
